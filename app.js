@@ -1601,6 +1601,19 @@ document.addEventListener('DOMContentLoaded', () => {
     el.lblOmrProgress.textContent = `${answeredCount} / ${session.questions.length}`;
   }
 
+  // Infinite mode's "강제 종료" -- unlike submitExam(), this does not score
+  // anything or touch incorrect notes. It just stops the session and
+  // returns to whichever tab it was launched from (its normal landing
+  // content, e.g. the local dump tab's setup screen).
+  function forceEndExam() {
+    const session = state.examSession;
+    if (session.timerInterval) {
+      clearInterval(session.timerInterval);
+    }
+    session.active = false;
+    switchTab(state.currentTab);
+  }
+
   function submitExam() {
     const session = state.examSession;
     if (session.timerInterval) {
@@ -1924,18 +1937,25 @@ document.addEventListener('DOMContentLoaded', () => {
     el.btnSubmitExam.addEventListener('click', () => {
       const session = state.examSession;
       const isKo = state.currentLang === 'ko';
-      let confirmMsg;
+
+      // Infinite mode has no fixed end -- "강제 종료" just stops the session
+      // and returns to wherever it was launched from, with no scoring and
+      // no incorrect-notes save (there's no meaningful "final score" for an
+      // open-ended drill).
       if (session.mode === 'infinite') {
-        const answered = session.questions.filter((_, idx) => session.userAnswers[idx] !== undefined).length;
-        confirmMsg = isKo
-          ? `지금까지 푼 ${answered}문제를 기준으로 채점하고 시험을 종료합니다. 계속할까요?`
-          : `This will end the session and score your ${answered} answered question(s) so far. Continue?`;
-      } else {
-        const unanswered = session.questions.filter((_, idx) => session.userAnswers[idx] === undefined).length;
-        confirmMsg = unanswered > 0
-          ? (isKo ? `아직 풀지 않은 문제가 ${unanswered}개 있습니다. 정말로 제출하시겠습니까?` : `You have ${unanswered} unanswered questions. Submit anyway?`)
-          : (isKo ? '모든 답안을 제출하시겠습니까?' : 'Do you want to submit your final answers?');
+        const confirmMsg = isKo
+          ? '시험을 종료합니다. 채점이나 오답노트 저장 없이 바로 종료됩니다. 계속할까요?'
+          : 'This ends the session immediately with no scoring and no incorrect-notes save. Continue?';
+        if (confirm(confirmMsg)) {
+          forceEndExam();
+        }
+        return;
       }
+
+      const unanswered = session.questions.filter((_, idx) => session.userAnswers[idx] === undefined).length;
+      const confirmMsg = unanswered > 0
+        ? (isKo ? `아직 풀지 않은 문제가 ${unanswered}개 있습니다. 정말로 제출하시겠습니까?` : `You have ${unanswered} unanswered questions. Submit anyway?`)
+        : (isKo ? '모든 답안을 제출하시겠습니까?' : 'Do you want to submit your final answers?');
 
       if (confirm(confirmMsg)) {
         submitExam();
