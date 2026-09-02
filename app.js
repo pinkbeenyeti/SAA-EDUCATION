@@ -111,6 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnPrevQuestion: document.getElementById('btnPrevQuestion'),
     btnNextQuestion: document.getElementById('btnNextQuestion'),
     btnSubmitExam: document.getElementById('btnSubmitExam'),
+    btnForceEndExam: document.getElementById('btnForceEndExam'),
     lblSubmitExamText: document.getElementById('lblSubmitExamText'),
     iconSubmitExam: document.getElementById('iconSubmitExam'),
     examTimerDisplay: document.getElementById('examTimerDisplay'),
@@ -530,32 +531,47 @@ document.addEventListener('DOMContentLoaded', () => {
     mmApplyView();
   }
 
+  /** Union bounding box (world coords) of a node and every visible descendant. */
+  function mmSubtreeBounds(n) {
+    let minX = n.x, minY = n.y - n.h / 2, maxX = n.x + n.w, maxY = n.y + n.h / 2;
+    const walk = (m) => {
+      minX = Math.min(minX, m.x);
+      minY = Math.min(minY, m.y - m.h / 2);
+      maxX = Math.max(maxX, m.x + m.w);
+      maxY = Math.max(maxY, m.y + m.h / 2);
+      (m.visibleKids || []).forEach(walk);
+    };
+    (n.visibleKids || []).forEach(walk);
+    return { minX, minY, maxX, maxY };
+  }
+
   /**
    * Expanding a node reveals children further right/down without ever
    * re-fitting the view, so on the small mobile canvas (58vh, narrow width)
-   * a newly revealed node -- often an exam-point leaf, the deepest column --
-   * can land partly outside mm-canvas-wrapper's clipped bounds and look cut
-   * off. Pan just enough to bring the given node's box fully into view.
+   * the newly revealed set -- often several exam-point leaves stacked in
+   * the deepest column -- can spill outside mm-canvas-wrapper's clipped
+   * bounds and look cut off, even after panning just the clicked node
+   * itself into view. Check the whole revealed subtree instead: if it
+   * already fits on screen, leave the view alone; otherwise pan (and, only
+   * if that alone isn't enough, zoom out -- never in) until all of it fits.
    */
   function mmEnsureVisible(n) {
     const rect = el.mmCanvasWrapper.getBoundingClientRect();
     if (!rect.width) return;
-    const k = mm.view.k;
-    const left = mm.view.x + n.x * k;
-    const top = mm.view.y + (n.y - n.h / 2) * k;
-    const right = left + n.w * k;
-    const bottom = top + (n.h * k);
+    const b = mmSubtreeBounds(n);
     const pad = 16;
-    let dx = 0, dy = 0;
-    if (left < pad) dx = pad - left;
-    else if (right > rect.width - pad) dx = (rect.width - pad) - right;
-    if (top < pad) dy = pad - top;
-    else if (bottom > rect.height - pad) dy = (rect.height - pad) - bottom;
-    if (dx || dy) {
-      mm.view.x += dx;
-      mm.view.y += dy;
-      mmApplyView();
-    }
+    const k = mm.view.k;
+    const left = mm.view.x + b.minX * k, top = mm.view.y + b.minY * k;
+    const right = mm.view.x + b.maxX * k, bottom = mm.view.y + b.maxY * k;
+    if (left >= pad && top >= pad && right <= rect.width - pad && bottom <= rect.height - pad) return;
+
+    const boxW = b.maxX - b.minX, boxH = b.maxY - b.minY;
+    const availW = rect.width - pad * 2, availH = rect.height - pad * 2;
+    const newK = Math.max(0.3, Math.min(k, availW / boxW, availH / boxH));
+    mm.view.k = newK;
+    mm.view.x = pad - b.minX * newK + Math.max(0, (availW - boxW * newK) / 2);
+    mm.view.y = pad - b.minY * newK + Math.max(0, (availH - boxH * newK) / 2);
+    mmApplyView();
   }
 
   /**
@@ -577,9 +593,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // (the Figma/Google Maps convention; trackpad pinch also reports as
   // ctrlKey wheel), two-finger pinch on touch. Mouse-drag still pans at any
   // width, since a mouse drag is never ambiguous with "scroll the page".
+  // Two-finger touch does both at once, like any map app: pinch to zoom,
+  // drag the pair together to pan. Anchored on the world point under the
+  // gesture's midpoint at touch-start, recomputed from the CURRENT
+  // midpoint every move -- so the point under your fingers stays under
+  // your fingers whether you're pinching, dragging, or both together.
   function mmBindCanvasEvents() {
-    const touches = new Map(); // pointerId -> {x, y}, touch pointers only, for pinch tracking
-    let pinch = null; // {startDist, startK, midX, midY} while a 2-finger pinch is active
+    const touches = new Map(); // pointerId -> {x, y}, touch pointers only, for pinch/pan tracking
+    let pinch = null; // {startDist, startK, wx, wy} while a 2-finger gesture is active
 
     el.mmCanvasWrapper.addEventListener('pointerdown', ev => {
       if (ev.target.closest('.mm-node')) return;
@@ -590,11 +611,12 @@ document.addEventListener('DOMContentLoaded', () => {
           mm.pan = null;
           const [a, b] = [...touches.values()];
           const rect = el.mmCanvasWrapper.getBoundingClientRect();
+          const midX = (a.x + b.x) / 2 - rect.left, midY = (a.y + b.y) / 2 - rect.top;
           pinch = {
             startDist: Math.hypot(a.x - b.x, a.y - b.y),
             startK: mm.view.k,
-            midX: (a.x + b.x) / 2 - rect.left,
-            midY: (a.y + b.y) / 2 - rect.top
+            wx: (midX - mm.view.x) / mm.view.k,
+            wy: (midY - mm.view.y) / mm.view.k
           };
         }
         return; // let the browser scroll natively for a single touch
@@ -612,12 +634,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (touches.size === 2 && pinch) {
           ev.preventDefault();
           const [a, b] = [...touches.values()];
+          const rect = el.mmCanvasWrapper.getBoundingClientRect();
           const dist = Math.hypot(a.x - b.x, a.y - b.y);
+          const midX = (a.x + b.x) / 2 - rect.left, midY = (a.y + b.y) / 2 - rect.top;
           const k = Math.max(0.3, Math.min(2.2, pinch.startK * (dist / pinch.startDist)));
-          const ratio = k / mm.view.k;
-          mm.view.x = pinch.midX - (pinch.midX - mm.view.x) * ratio;
-          mm.view.y = pinch.midY - (pinch.midY - mm.view.y) * ratio;
           mm.view.k = k;
+          mm.view.x = midX - pinch.wx * k;
+          mm.view.y = midY - pinch.wy * k;
           mmApplyView();
         }
         return;
@@ -1672,6 +1695,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // and the explanation already appears automatically on selection.
     if (el.omrSheetCard) el.omrSheetCard.style.display = session.mode === 'infinite' ? 'none' : '';
     el.btnShowExplanation.style.display = session.mode === 'infinite' ? 'none' : '';
+    // Infinite mode's own Submit button already IS the no-score force-end;
+    // fixed-count sessions get a separate button for it alongside Submit.
+    if (el.btnForceEndExam) el.btnForceEndExam.style.display = session.mode === 'infinite' ? 'none' : '';
 
     // Navigation buttons state -- infinite mode can always advance (it draws
     // another random question on demand instead of running out).
@@ -2073,6 +2099,18 @@ document.addEventListener('DOMContentLoaded', () => {
         submitExam();
       }
     });
+
+    if (el.btnForceEndExam) {
+      el.btnForceEndExam.addEventListener('click', () => {
+        const isKo = state.currentLang === 'ko';
+        const confirmMsg = isKo
+          ? '시험을 종료합니다. 채점이나 오답노트 저장 없이 바로 종료됩니다. 계속할까요?'
+          : 'This ends the session immediately with no scoring and no incorrect-notes save. Continue?';
+        if (confirm(confirmMsg)) {
+          forceEndExam();
+        }
+      });
+    }
 
     el.btnRestartExam.addEventListener('click', () => {
       state.examSession.active = false;
