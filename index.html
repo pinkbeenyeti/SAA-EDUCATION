@@ -48,10 +48,6 @@
       </nav>
 
       <div class="nav-actions">
-        <button class="btn-secondary" id="btnOpenDumpModal" title="Import 650 Dump Questions JSON">
-          <span>📥</span> <span class="btn-label" data-ko="덤프 임포트" data-en="Import Dump">덤프 임포트</span>
-        </button>
-        
         <button class="lang-toggle-btn" id="btnGlobalLangToggle" title="Toggle Language (한/영)">
           🌐 <span id="currentLangDisplay"><span class="lang-active">KO</span> / EN</span>
         </button>
@@ -148,9 +144,14 @@
             </div>
           </div>
         </div>
+      </section>
 
-        <!-- In-Progress Screen -->
-        <div id="examInProgressScreen" style="display: none;">
+      <!-- Exam in-progress / result screens live outside the tab-view system
+           so a session launched from another tab (e.g. local dump practice)
+           can be solved without navigating away from that tab. Visibility is
+           controlled entirely by app.js based on which tab launched the
+           active session (see startExam()/switchTab() in app.js). -->
+      <div id="examInProgressScreen" style="display: none;">
           <div class="exam-in-progress">
             <!-- Left Main Question Card -->
             <div class="exam-main-panel">
@@ -207,7 +208,7 @@
                 <div class="timer-display" id="examTimerDisplay">130:00</div>
               </div>
 
-              <div class="omr-sheet-card">
+              <div class="omr-sheet-card" id="omrSheetCard">
                 <div class="omr-sheet-title">
                   <span data-ko="OMR 답안 현황" data-en="Answer Sheet">OMR 답안 현황</span>
                   <span id="lblOmrProgress" style="font-size: 0.75rem; color: var(--accent-aws);">0 / 20</span>
@@ -252,7 +253,6 @@
             </div>
           </div>
         </div>
-      </section>
 
       <!-- ==========================================
            TAB 3: Incorrect Notes View
@@ -363,15 +363,7 @@
                 <!-- Exam Tips, only when this concept maps to a curated service -->
               </ul>
             </div>
-
-            <div>
-              <div class="inspector-section-title">
-                <span>📝</span> <span data-ko="이 개념과 연결된 문제" data-en="Questions tagged to this concept">이 개념과 연결된 문제</span>
-              </div>
-              <div id="cqModalQuestionList">
-                <!-- Question cards, each with its own "풀기" button -->
-              </div>
-            </div>
+            <p id="cqTipsEmptyState" class="cq-empty-state" style="display: none;" data-ko="이 개념에는 등록된 핵심 출제 팁이 아직 없습니다. '문제 풀이' 탭에서 연결된 문제를 풀어보세요." data-en="No curated exam tips for this concept yet. Try the 'Practice' tab to solve its linked questions."></p>
           </div>
 
           <div id="cqPracticePanel" class="cq-panel" style="display: none;">
@@ -401,59 +393,6 @@
 
         <div class="inspector-footer">
           <button class="btn-secondary" id="btnCloseConceptQuestionsFooter" data-ko="닫기" data-en="Close">닫기</button>
-          <button class="btn-primary" id="btnStartConceptQuiz">
-            <span>📝</span> <span data-ko="문제 풀이 시작" data-en="Start Practice">문제 풀이 시작</span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ==========================================
-         Dump Importer Modal
-         ========================================== -->
-    <div class="modal-overlay" id="modalDumpImporter">
-      <div class="inspector-modal" style="max-width: 650px;">
-        <div class="inspector-header">
-          <div class="inspector-title-area">
-            <span class="inspector-icon">📥</span>
-            <div>
-              <h2 data-ko="650문제 덤프 JSON 가져오기" data-en="Import 650 Question Dump JSON">650문제 덤프 JSON 가져오기</h2>
-              <span class="service-badge" data-ko="NotebookLM / Custom JSON 지원" data-en="NotebookLM / Custom JSON Compatible">NotebookLM / Custom JSON 지원</span>
-            </div>
-          </div>
-          <button class="close-btn" id="btnCloseDumpModal">&times;</button>
-        </div>
-
-        <div class="inspector-body">
-          <p style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.5;" data-ko="아래 텍스트 영역에 SAA 기출 덤프 JSON 데이터를 직접 붙여넣거나 .json 파일을 업로드하세요. 로컬 스토리지에 즉시 병합되어 모의고사에 반영됩니다." data-en="Paste SAA question dump JSON or upload a .json file. Imported questions are safely merged into your local storage.">
-            아래 텍스트 영역에 SAA 기출 덤프 JSON 데이터를 직접 붙여넣거나 .json 파일을 업로드하세요. 로컬 스토리지에 즉시 병합되어 모의고사에 반영됩니다.
-          </p>
-
-          <label class="file-dropzone" for="fileDumpUpload">
-            <span style="font-size: 1.5rem;">📂</span>
-            <div style="font-weight: 600; margin-top: 0.25rem;" data-ko=".json 파일 선택 또는 드래그" data-en="Choose or Drop .json file">.json 파일 선택 또는 드래그</div>
-            <input type="file" id="fileDumpUpload" accept=".json" style="display: none;">
-          </label>
-
-          <textarea id="txtDumpJsonInput" class="dump-modal-textarea" placeholder='[
-  {
-    "id": "custom_q1",
-    "question_ko": "EC2 문제 내용...",
-    "question_en": "EC2 Question Scenario...",
-    "options_ko": ["보기 1", "보기 2", "보기 3", "보기 4"],
-    "options_en": ["Option 1", "Option 2", "Option 3", "Option 4"],
-    "answer": 0,
-    "explanation_ko": "정답 해설...",
-    "explanation_en": "Explanation..."
-  }
-]'></textarea>
-        </div>
-
-        <div class="inspector-footer">
-          <button class="btn-secondary" id="btnDumpLoadSample" data-ko="샘플 템플릿 채우기" data-en="Load Sample Template">샘플 템플릿 채우기</button>
-          <button class="btn-primary" id="btnExecuteDumpImport">
-            <span>💾</span> <span data-ko="문제 뱅크에 추가하기" data-en="Import to Question Bank">문제 뱅크에 추가하기</span>
-          </button>
         </div>
       </div>
     </div>

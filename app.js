@@ -44,7 +44,6 @@ document.addEventListener('DOMContentLoaded', () => {
     tabViews: document.querySelectorAll('.tab-view'),
     btnGlobalLangToggle: document.getElementById('btnGlobalLangToggle'),
     currentLangDisplay: document.getElementById('currentLangDisplay'),
-    btnOpenDumpModal: document.getElementById('btnOpenDumpModal'),
     incorrectBadgeCount: document.getElementById('incorrectBadgeCount'),
     navBrandLogo: document.getElementById('navBrandLogo'),
 
@@ -79,8 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
     cqModalBadge: document.getElementById('cqModalBadge'),
     cqModalTipsWrap: document.getElementById('cqModalTipsWrap'),
     cqModalTipsList: document.getElementById('cqModalTipsList'),
-    cqModalQuestionList: document.getElementById('cqModalQuestionList'),
-    btnStartConceptQuiz: document.getElementById('btnStartConceptQuiz'),
+    cqTipsEmptyState: document.getElementById('cqTipsEmptyState'),
     btnCqTabTips: document.getElementById('btnCqTabTips'),
     btnCqTabPractice: document.getElementById('btnCqTabPractice'),
     cqTipsPanel: document.getElementById('cqTipsPanel'),
@@ -116,6 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
     lblSubmitExamText: document.getElementById('lblSubmitExamText'),
     iconSubmitExam: document.getElementById('iconSubmitExam'),
     examTimerDisplay: document.getElementById('examTimerDisplay'),
+    omrSheetCard: document.getElementById('omrSheetCard'),
     omrGridContainer: document.getElementById('omrGridContainer'),
     lblOmrProgress: document.getElementById('lblOmrProgress'),
 
@@ -134,13 +133,6 @@ document.addEventListener('DOMContentLoaded', () => {
     btnClearAllIncorrect: document.getElementById('btnClearAllIncorrect'),
     btnRetakeIncorrectExam: document.getElementById('btnRetakeIncorrectExam'),
 
-    // Dump Modal
-    modalDumpImporter: document.getElementById('modalDumpImporter'),
-    btnCloseDumpModal: document.getElementById('btnCloseDumpModal'),
-    fileDumpUpload: document.getElementById('fileDumpUpload'),
-    txtDumpJsonInput: document.getElementById('txtDumpJsonInput'),
-    btnDumpLoadSample: document.getElementById('btnDumpLoadSample'),
-    btnExecuteDumpImport: document.getElementById('btnExecuteDumpImport')
   };
 
   // ==========================================================================
@@ -1178,7 +1170,11 @@ document.addEventListener('DOMContentLoaded', () => {
     state.selectedConceptMeta = meta;
     state.selectedCuratedService = curated;
     state.selectedConceptQuestions = questions;
-    state.cqTab = 'tips';
+    // Default straight to Practice when this concept has no curated tips --
+    // the Tips tab would otherwise open on an empty state every time.
+    const isKo = state.currentLang === 'ko';
+    const tips = curated ? (isKo ? curated.exam_tips_ko : curated.exam_tips_en) : null;
+    state.cqTab = (tips && tips.length > 0) ? 'tips' : 'practice';
     state.cqPractice = { index: 0, userAnswers: {}, revealed: {} };
     renderConceptQuestionModalContent();
     el.modalConceptQuestions.classList.add('active');
@@ -1212,10 +1208,12 @@ document.addEventListener('DOMContentLoaded', () => {
     el.cqModalLangDisplay.innerHTML = isKo ? '<span class="lang-active">KO</span> / EN' : 'KO / <span class="lang-active">EN</span>';
 
     // Exam tips are a bonus, only shown when this concept matches a curated
-    // AWS_DOMAINS service -- otherwise the section is hidden entirely.
+    // AWS_DOMAINS service -- otherwise the tab shows a pointer to Practice.
     el.cqModalTipsList.innerHTML = '';
     const tips = curated ? (isKo ? curated.exam_tips_ko : curated.exam_tips_en) : null;
-    el.cqModalTipsWrap.style.display = (tips && tips.length > 0) ? '' : 'none';
+    const hasTips = !!(tips && tips.length > 0);
+    el.cqModalTipsWrap.style.display = hasTips ? '' : 'none';
+    el.cqTipsEmptyState.style.display = hasTips ? 'none' : '';
     if (tips) {
       tips.forEach(tip => {
         const li = document.createElement('li');
@@ -1223,27 +1221,6 @@ document.addEventListener('DOMContentLoaded', () => {
         el.cqModalTipsList.appendChild(li);
       });
     }
-
-    // Question list, each with its own "풀기" button that jumps straight to
-    // that question inside the in-modal Practice tab (no tab/page navigation).
-    el.cqModalQuestionList.innerHTML = '';
-    questions.forEach((q, i) => {
-      const card = document.createElement('div');
-      card.className = 'mm-question';
-      const stem = document.createElement('p');
-      stem.textContent = isKo ? q.question_ko : q.question_en;
-      card.appendChild(stem);
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'btn-secondary';
-      btn.textContent = isKo ? '풀기' : 'Solve';
-      btn.addEventListener('click', () => {
-        state.cqPractice.index = i;
-        setCqTab('practice');
-      });
-      card.appendChild(btn);
-      el.cqModalQuestionList.appendChild(card);
-    });
 
     setCqTab(state.cqTab || 'tips');
   }
@@ -1319,7 +1296,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (isRevealed) {
       el.cqExplanationBox.style.display = 'block';
-      el.cqLblExplanationText.textContent = isKo ? q.explanation_ko : q.explanation_en;
+      el.cqLblExplanationText.innerHTML = renderExplanationMarkdown(isKo ? q.explanation_ko : q.explanation_en);
     } else {
       el.cqExplanationBox.style.display = 'none';
     }
@@ -1383,6 +1360,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.examSession = {
       active: true,
       mode: infinite ? 'infinite' : 'fixed',
+      homeTab: state.currentTab,
       sourcePool,
       questions: questionsPool,
       currentIndex: 0,
@@ -1398,7 +1376,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     updateSubmitButtonLabel();
 
-    // UI screen toggle
+    // UI screen toggle -- hide whichever tab-view is currently showing (the
+    // exam screens live outside the tab-view system, see switchTab()) and
+    // reveal the exam overlay in its place, without changing state.currentTab
+    // or the nav-bar highlight. This lets e.g. local dump practice run
+    // without navigating away from its own tab.
+    el.tabViews.forEach(v => v.classList.remove('active'));
     el.examSetupScreen.style.display = 'none';
     el.examResultScreen.style.display = 'none';
     el.examInProgressScreen.style.display = 'block';
@@ -1539,6 +1522,12 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!session.isSubmitted) {
         optItem.addEventListener('click', () => {
           session.userAnswers[idx] = optIdx;
+          // Infinite mode is a flashcard-style drill: show right/wrong and
+          // the explanation the instant an option is picked, no separate
+          // "Show Explanation" click needed.
+          if (session.mode === 'infinite') {
+            session.revealed[idx] = true;
+          }
           renderCurrentQuestion();
           renderOmrSheet();
         });
@@ -1550,10 +1539,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Explanation Box
     if (isRevealed) {
       el.questionExplanationBox.style.display = 'block';
-      el.lblExplanationText.textContent = isKo ? q.explanation_ko : q.explanation_en;
+      el.lblExplanationText.innerHTML = renderExplanationMarkdown(isKo ? q.explanation_ko : q.explanation_en);
     } else {
       el.questionExplanationBox.style.display = 'none';
     }
+
+    // Infinite mode has no fixed question count to map onto an OMR sheet,
+    // and the explanation already appears automatically on selection.
+    if (el.omrSheetCard) el.omrSheetCard.style.display = session.mode === 'infinite' ? 'none' : '';
+    el.btnShowExplanation.style.display = session.mode === 'infinite' ? 'none' : '';
 
     // Navigation buttons state -- infinite mode can always advance (it draws
     // another random question on demand instead of running out).
@@ -1750,7 +1744,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="explanation-box" style="margin-top: 0;">
           <div class="explanation-title">💡 ${isKo ? '핵심 개념 해설' : 'Key Explanation'}</div>
-          <div class="explanation-content">${isKo ? q.explanation_ko : q.explanation_en}</div>
+          <div class="explanation-content">${renderExplanationMarkdown(isKo ? q.explanation_ko : q.explanation_en)}</div>
         </div>
       `;
 
@@ -1863,15 +1857,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // Jump straight into the in-modal Practice tab for every question
-    // tagged to the selected concept -- no tab/page navigation involved.
-    el.btnStartConceptQuiz.addEventListener('click', () => {
-      const questions = state.selectedConceptQuestions || [];
-      if (questions.length === 0) return;
-      state.cqPractice.index = 0;
-      setCqTab('practice');
-    });
-
     // Exam Controls
     el.btnStartExam.addEventListener('click', () => {
       startExam(null, { infinite: el.selectExamCount.value === 'infinite' });
@@ -1881,7 +1866,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el.btnStartLocalDumpExam) {
       el.btnStartLocalDumpExam.addEventListener('click', () => {
         const val = el.selectLocalDumpCount.value;
-        switchTab('exam');
         if (val === 'infinite') {
           startExam(LOCAL_DUMP_BANK, { infinite: true });
         } else {
@@ -1947,8 +1931,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     el.btnRestartExam.addEventListener('click', () => {
-      el.examResultScreen.style.display = 'none';
-      el.examSetupScreen.style.display = 'block';
+      state.examSession.active = false;
+      switchTab(state.currentTab);
     });
 
     el.btnGoToIncorrectNotes.addEventListener('click', () => {
@@ -1976,67 +1960,6 @@ document.addEventListener('DOMContentLoaded', () => {
       startExam(questions);
     });
 
-    // Dump Importer Modal Controls
-    el.btnOpenDumpModal.addEventListener('click', () => {
-      el.modalDumpImporter.classList.add('active');
-    });
-
-    el.btnCloseDumpModal.addEventListener('click', () => {
-      el.modalDumpImporter.classList.remove('active');
-    });
-
-    el.modalDumpImporter.addEventListener('click', (e) => {
-      if (e.target === el.modalDumpImporter) el.modalDumpImporter.classList.remove('active');
-    });
-
-    el.btnDumpLoadSample.addEventListener('click', () => {
-      const sample = [
-        {
-          id: "custom_dump_" + Date.now(),
-          service_id: "s3",
-          domain_id: "storage",
-          difficulty: "Medium",
-          question_ko: "대용량 비디오 파일을 Amazon S3에 5GB 이상 단일 업로드하려고 할 때 권장되는 API 방식은?",
-          question_en: "Which Amazon S3 API method is recommended for uploading files larger than 5GB?",
-          options_ko: ["Standard PUT Object", "Multipart Upload API", "S3 Select", "S3 Batch Operations"],
-          options_en: ["Standard PUT Object", "Multipart Upload API", "S3 Select", "S3 Batch Operations"],
-          answer: 1,
-          explanation_ko: "100MB를 초과하는 객체는 Multipart Upload 사용이 권장되며, 5GB를 초과하는 대용량 객체는 Multipart Upload가 필수입니다.",
-          explanation_en: "Multipart Upload is recommended for files >100MB and mandatory for objects larger than 5GB."
-        }
-      ];
-      el.txtDumpJsonInput.value = JSON.stringify(sample, null, 2);
-    });
-
-    // File Upload handling
-    el.fileDumpUpload.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        el.txtDumpJsonInput.value = event.target.result;
-      };
-      reader.readAsText(file);
-    });
-
-    // Execute Import
-    el.btnExecuteDumpImport.addEventListener('click', () => {
-      const content = el.txtDumpJsonInput.value.trim();
-      if (!content) {
-        alert(state.currentLang === 'ko' ? 'JSON 데이터를 입력해주세요.' : 'Please enter JSON data.');
-        return;
-      }
-      const res = importDumpQuestions(content);
-      if (res.success) {
-        alert(state.currentLang === 'ko' 
-          ? `성공적으로 ${res.count}개의 문제가 문제 뱅크에 추가되었습니다! (총 커스텀 문제: ${res.totalCustom})`
-          : `Successfully imported ${res.count} questions! (Total custom: ${res.totalCustom})`);
-        el.modalDumpImporter.classList.remove('active');
-        el.txtDumpJsonInput.value = '';
-      } else {
-        alert(res.message);
-      }
-    });
   }
 
   function switchTab(tabId) {
@@ -2050,11 +1973,24 @@ document.addEventListener('DOMContentLoaded', () => {
       view.classList.remove('active');
     });
 
+    // The exam-in-progress/result screens live outside the tab-view system
+    // (see startExam()) so a session started from a tab other than "exam"
+    // (e.g. local dump practice) stays visible without navigating away from
+    // it. Only keep them on screen if this is still the tab the active
+    // session was launched from -- otherwise hide them and let the target
+    // tab show its own normal content.
+    const keepExamOverlay = state.examSession.active && state.examSession.homeTab === tabId;
+    if (!keepExamOverlay) {
+      el.examInProgressScreen.style.display = 'none';
+      el.examResultScreen.style.display = 'none';
+    }
+
     if (tabId === 'mindmap') {
       document.getElementById('viewMindmap').classList.add('active');
       renderKnowledgeGraph();
     } else if (tabId === 'exam') {
       document.getElementById('viewExam').classList.add('active');
+      if (!keepExamOverlay) el.examSetupScreen.style.display = 'block';
     } else if (tabId === 'incorrect') {
       document.getElementById('viewIncorrect').classList.add('active');
       renderIncorrectNotes();
@@ -2095,6 +2031,43 @@ document.addEventListener('DOMContentLoaded', () => {
       [copy[i], copy[j]] = [copy[j], copy[i]];
     }
     return copy;
+  }
+
+  // Explanation text ranges from plain one-line dump answers to richly
+  // formatted generated-question write-ups (**bold**, `code`, - bullet and
+  // 1. numbered lists, ### headings, --- dividers). Rendering it as plain
+  // textContent collapsed everything into one unreadable wall of text with
+  // literal asterisks. This renders that limited markdown subset as HTML
+  // instead -- text is escaped first, so nothing in the source can inject
+  // extra markup.
+  function renderExplanationMarkdown(text) {
+    if (!text) return '';
+    const escapeHtml = s => s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    let html = escapeHtml(String(text));
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    html = html.replace(/^###\s*(.+)$/gm, '<span class="exp-heading">$1</span>');
+    html = html.replace(/^---+$/gm, '<hr class="exp-divider">');
+
+    const blocks = html.split(/\n\s*\n/);
+    return blocks.map(block => {
+      const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+      if (lines.length === 0) return '';
+      if (lines.length === 1 && /^(<span class="exp-heading">|<hr class="exp-divider">)/.test(lines[0])) {
+        return lines[0];
+      }
+      if (lines.every(l => /^[-*]\s+/.test(l))) {
+        return '<ul>' + lines.map(l => `<li>${l.replace(/^[-*]\s+/, '')}</li>`).join('') + '</ul>';
+      }
+      if (lines.every(l => /^\d+[.)]\s+/.test(l))) {
+        return '<ol>' + lines.map(l => `<li>${l.replace(/^\d+[.)]\s+/, '')}</li>`).join('') + '</ol>';
+      }
+      return `<p>${lines.join('<br>')}</p>`;
+    }).join('');
   }
 
   function debounce(fn, wait) {
