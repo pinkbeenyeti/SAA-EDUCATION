@@ -469,6 +469,18 @@ document.addEventListener('DOMContentLoaded', () => {
     mm.selected = id;
     mmRender();
     mmRenderPanel();
+
+    // clicking an exam-point leaf should jump straight to that point inside
+    // the panel -- scrollIntoView walks every scrollable ancestor (the
+    // panel's own overflow-y on desktop, the whole page on the stacked
+    // mobile layout), so one call handles both layouts.
+    const n = mm.byId[id];
+    if (n && n.kind === 'point') {
+      requestAnimationFrame(() => {
+        const active = el.mmPanel.querySelector('.mm-keypoint.is-active');
+        if (active) active.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
   }
 
   function mmExpandTo(id) {
@@ -528,24 +540,75 @@ document.addEventListener('DOMContentLoaded', () => {
     mmApplyView();
   }
 
+  // Plain wheel/single-finger-touch always scroll the page -- the canvas
+  // never captures them. Zoom is an explicit gesture: Ctrl+wheel on desktop
+  // (the Figma/Google Maps convention; trackpad pinch also reports as
+  // ctrlKey wheel), two-finger pinch on touch. Mouse-drag still pans at any
+  // width, since a mouse drag is never ambiguous with "scroll the page".
   function mmBindCanvasEvents() {
+    const touches = new Map(); // pointerId -> {x, y}, touch pointers only, for pinch tracking
+    let pinch = null; // {startDist, startK, midX, midY} while a 2-finger pinch is active
+
     el.mmCanvasWrapper.addEventListener('pointerdown', ev => {
       if (ev.target.closest('.mm-node')) return;
+
+      if (ev.pointerType === 'touch') {
+        touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+        if (touches.size === 2) {
+          mm.pan = null;
+          const [a, b] = [...touches.values()];
+          const rect = el.mmCanvasWrapper.getBoundingClientRect();
+          pinch = {
+            startDist: Math.hypot(a.x - b.x, a.y - b.y),
+            startK: mm.view.k,
+            midX: (a.x + b.x) / 2 - rect.left,
+            midY: (a.y + b.y) / 2 - rect.top
+          };
+        }
+        return; // let the browser scroll natively for a single touch
+      }
+
       mm.pan = { sx: ev.clientX, sy: ev.clientY, vx: mm.view.x, vy: mm.view.y };
       el.mmCanvasWrapper.setPointerCapture(ev.pointerId);
       el.mmCanvasWrapper.classList.add('is-panning');
     });
+
     el.mmCanvasWrapper.addEventListener('pointermove', ev => {
+      if (ev.pointerType === 'touch') {
+        if (!touches.has(ev.pointerId)) return;
+        touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+        if (touches.size === 2 && pinch) {
+          ev.preventDefault();
+          const [a, b] = [...touches.values()];
+          const dist = Math.hypot(a.x - b.x, a.y - b.y);
+          const k = Math.max(0.3, Math.min(2.2, pinch.startK * (dist / pinch.startDist)));
+          const ratio = k / mm.view.k;
+          mm.view.x = pinch.midX - (pinch.midX - mm.view.x) * ratio;
+          mm.view.y = pinch.midY - (pinch.midY - mm.view.y) * ratio;
+          mm.view.k = k;
+          mmApplyView();
+        }
+        return;
+      }
       if (!mm.pan) return;
       mm.view.x = mm.pan.vx + (ev.clientX - mm.pan.sx);
       mm.view.y = mm.pan.vy + (ev.clientY - mm.pan.sy);
       mmApplyView();
-    });
-    const endPan = () => { mm.pan = null; el.mmCanvasWrapper.classList.remove('is-panning'); };
+    }, { passive: false });
+
+    const endPan = ev => {
+      if (ev && ev.pointerType === 'touch') {
+        touches.delete(ev.pointerId);
+        if (touches.size < 2) pinch = null;
+      }
+      mm.pan = null;
+      el.mmCanvasWrapper.classList.remove('is-panning');
+    };
     el.mmCanvasWrapper.addEventListener('pointerup', endPan);
     el.mmCanvasWrapper.addEventListener('pointercancel', endPan);
 
     el.mmCanvasWrapper.addEventListener('wheel', ev => {
+      if (!ev.ctrlKey) return; // plain wheel: let the page scroll
       ev.preventDefault();
       const rect = el.mmCanvasWrapper.getBoundingClientRect();
       const mx = ev.clientX - rect.left, my = ev.clientY - rect.top;
@@ -1226,7 +1289,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const isKo = state.currentLang === 'ko';
     el.cqModalIcon.textContent = (curated && curated.icon) || '📘';
-    el.cqModalTitle.textContent = isKo ? meta.label_ko : meta.label_en;
+    el.cqModalTitle.textContent = isKo ? meta.label_ko : meta.label;
     el.cqModalBadge.textContent = isKo ? `문제 ${questions.length}개` : `${questions.length} questions`;
     el.cqModalLangDisplay.innerHTML = isKo ? '<span class="lang-active">KO</span> / EN' : 'KO / <span class="lang-active">EN</span>';
 

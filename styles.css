@@ -401,7 +401,10 @@ summary:focus-visible, a:focus-visible, .mm-node:focus-visible {
   border-radius: var(--r-xl);
   box-shadow: var(--lift-1);
   cursor: grab;
-  touch-action: none;
+  /* pan-y: native vertical scroll passes through for a single finger;
+     two-finger pinch is handled by app.js instead of the browser's
+     native page-zoom (which pan-y already excludes). */
+  touch-action: pan-y;
 }
 .mm-canvas-wrapper.is-panning { cursor: grabbing; }
 
@@ -1525,7 +1528,10 @@ summary:focus-visible, a:focus-visible, .mm-node:focus-visible {
 @media (max-width: 1180px) {
   .kg-stage { flex-direction: column; height: auto; }
   .mm-canvas-wrapper { height: 58vh; min-height: 400px; }
-  .mm-panel { width: 100%; }
+  /* Force plain document flow: no independent scrollbox on the panel, so
+     the mouse/finger scrolls the whole page no matter where it's hovering
+     over the panel's content -- not just its own internal scroll area. */
+  .mm-panel { width: 100%; overflow-y: visible; overscroll-behavior: auto; }
 }
 
 @media (max-width: 960px) {
