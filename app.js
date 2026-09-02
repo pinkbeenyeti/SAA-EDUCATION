@@ -470,11 +470,15 @@ document.addEventListener('DOMContentLoaded', () => {
     mmRender();
     mmRenderPanel();
 
+    // re-laid-out position after this render's expand/collapse -- pan it
+    // fully into the canvas viewport if expanding pushed it out of bounds.
+    const n = mm.byId[id];
+    if (n) mmEnsureVisible(n);
+
     // clicking an exam-point leaf should jump straight to that point inside
     // the panel -- scrollIntoView walks every scrollable ancestor (the
     // panel's own overflow-y on desktop, the whole page on the stacked
     // mobile layout), so one call handles both layouts.
-    const n = mm.byId[id];
     if (n && n.kind === 'point') {
       requestAnimationFrame(() => {
         const active = el.mmPanel.querySelector('.mm-keypoint.is-active');
@@ -524,6 +528,34 @@ document.addEventListener('DOMContentLoaded', () => {
     mm.view.x = 28;
     mm.view.y = Math.max(20, (rect.height - mm.size.h * mm.view.k) / 2);
     mmApplyView();
+  }
+
+  /**
+   * Expanding a node reveals children further right/down without ever
+   * re-fitting the view, so on the small mobile canvas (58vh, narrow width)
+   * a newly revealed node -- often an exam-point leaf, the deepest column --
+   * can land partly outside mm-canvas-wrapper's clipped bounds and look cut
+   * off. Pan just enough to bring the given node's box fully into view.
+   */
+  function mmEnsureVisible(n) {
+    const rect = el.mmCanvasWrapper.getBoundingClientRect();
+    if (!rect.width) return;
+    const k = mm.view.k;
+    const left = mm.view.x + n.x * k;
+    const top = mm.view.y + (n.y - n.h / 2) * k;
+    const right = left + n.w * k;
+    const bottom = top + (n.h * k);
+    const pad = 16;
+    let dx = 0, dy = 0;
+    if (left < pad) dx = pad - left;
+    else if (right > rect.width - pad) dx = (rect.width - pad) - right;
+    if (top < pad) dy = pad - top;
+    else if (bottom > rect.height - pad) dy = (rect.height - pad) - bottom;
+    if (dx || dy) {
+      mm.view.x += dx;
+      mm.view.y += dy;
+      mmApplyView();
+    }
   }
 
   /**
