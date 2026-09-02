@@ -749,8 +749,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // no way to reach its tips at all.
     const curated = findCuratedService(conceptId);
     const conceptQuestions = getAllQuestions().filter(q => (q.conceptIds || []).includes(conceptId));
-    const curatedTips = curated ? (isKo ? curated.exam_tips_ko : curated.exam_tips_en) : null;
-    const hasTips = !!(curatedTips && curatedTips.length > 0);
+    const hasTips = !!getConceptTips(conceptId, curated, isKo);
     if (conceptQuestions.length > 0 || hasTips) {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -1096,6 +1095,23 @@ document.addEventListener('DOMContentLoaded', () => {
     return null;
   }
 
+  // Tips come from the curated AWS_DOMAINS entry when this concept matches
+  // one of the 17 curated services, otherwise fall back to the smaller
+  // CONCEPT_EXAM_TIPS set written for other high-frequency concepts (see
+  // data.js). Returns null if neither has tips for this concept/language.
+  function getConceptTips(conceptId, curated, isKo) {
+    if (curated) {
+      const t = isKo ? curated.exam_tips_ko : curated.exam_tips_en;
+      if (t && t.length) return t;
+    }
+    const extra = CONCEPT_EXAM_TIPS[conceptId];
+    if (extra) {
+      const t = isKo ? extra.tips_ko : extra.tips_en;
+      if (t && t.length) return t;
+    }
+    return null;
+  }
+
   // ---------------------------------------------------------------- chrome
   function mmRenderCategoryPills() {
     const isKo = state.currentLang === 'ko';
@@ -1180,7 +1196,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Default straight to Practice when this concept has no curated tips --
     // the Tips tab would otherwise open on an empty state every time.
     const isKo = state.currentLang === 'ko';
-    const tips = curated ? (isKo ? curated.exam_tips_ko : curated.exam_tips_en) : null;
+    const tips = getConceptTips(meta.id, curated, isKo);
     state.cqTab = (tips && tips.length > 0) ? 'tips' : 'practice';
     state.cqPractice = { index: 0, userAnswers: {}, revealed: {} };
     renderConceptQuestionModalContent();
@@ -1214,10 +1230,11 @@ document.addEventListener('DOMContentLoaded', () => {
     el.cqModalBadge.textContent = isKo ? `문제 ${questions.length}개` : `${questions.length} questions`;
     el.cqModalLangDisplay.innerHTML = isKo ? '<span class="lang-active">KO</span> / EN' : 'KO / <span class="lang-active">EN</span>';
 
-    // Exam tips are a bonus, only shown when this concept matches a curated
-    // AWS_DOMAINS service -- otherwise the tab shows a pointer to Practice.
+    // Exam tips come from AWS_DOMAINS (curated services) or, failing that,
+    // CONCEPT_EXAM_TIPS (other high-frequency concepts) -- otherwise the tab
+    // shows a pointer to Practice.
     el.cqModalTipsList.innerHTML = '';
-    const tips = curated ? (isKo ? curated.exam_tips_ko : curated.exam_tips_en) : null;
+    const tips = getConceptTips(meta.id, curated, isKo);
     const hasTips = !!(tips && tips.length > 0);
     el.cqModalTipsWrap.style.display = hasTips ? '' : 'none';
     el.cqTipsEmptyState.style.display = hasTips ? 'none' : '';

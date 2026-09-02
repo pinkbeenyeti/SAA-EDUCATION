@@ -461,6 +461,97 @@ const AWS_DOMAINS = [
 ];
 
 /**
+ * Exam tips for mindmap concepts that are NOT one of AWS_DOMAINS' 17 curated
+ * services (principle/pattern concepts like "least operational overhead", or
+ * services outside the original curated set). Covers the top 20 of the
+ * remaining ~78 concepts by knowledge.js exam-frequency weight. Looked up
+ * as a fallback in app.js's getConceptTips() when a concept has no
+ * AWS_DOMAINS match.
+ */
+const CONCEPT_EXAM_TIPS = {
+  opex: {
+    tips_ko: ["\"LEAST operational overhead\" 조건: 684문제 중 134문제에 등장하는 최다 빈출 조건. 서버리스(Lambda·Fargate·DynamoDB) < 관리형(RDS·ElastiCache) < EC2 자체 운영 순으로 운영 부담이 낮음.", "자주 나오는 대체 쌍: 크론 서버→EventBridge 스케줄, 자체 SFTP→Transfer Family, 스냅샷 스크립트→AWS Backup, 자체 Hadoop→Glue/Athena.", "비용과 동시에 나오면 문제의 대문자 강조(MOST/LEAST)가 진짜 기준. EC2에 직접 설치하는 선택지부터 제거."],
+    tips_en: ["\"LEAST operational overhead\" is the single most common qualifier (134 of 684 questions). Overhead ladder: serverless (Lambda, Fargate, DynamoDB) < managed (RDS, ElastiCache) < self-hosted on EC2.", "Recurring substitutions: cron server -> EventBridge schedule, self-hosted SFTP -> Transfer Family, snapshot scripts -> AWS Backup, self-managed Hadoop -> Glue/Athena.", "When cost appears alongside it, the capitalized MOST/LEAST decides which wins. Eliminate \"install it on EC2\" options first."]
+  },
+  autoscaling: {
+    tips_ko: ["조정 정책: Target Tracking(목표값 유지, 가장 흔한 정답) / Step Scaling(임계값 구간별) / Scheduled Scaling(예측 가능한 시각).", "워커가 큐를 소비하면 CPU가 아니라 SQS 큐 길이(ApproximateNumberOfMessagesVisible)로 조정하는 게 정답.", "ELB 상태 확인을 켜야 앱은 죽었지만 인스턴스는 살아있는 경우까지 감지해 자동 교체.", "고가용성 요구가 있으면 여러 AZ에 걸친 ASG + ALB 조합이 표준 정답, 단일 AZ는 오답."],
+    tips_en: ["Scaling policies: Target Tracking (hold a metric at target -- most common answer), Step Scaling (per-threshold bands), Scheduled Scaling (predictable times).", "When workers consume a queue, scale on SQS queue depth, not CPU.", "Enable ELB health checks to catch a dead app on a live instance and auto-replace it.", "For \"highly available\", the standard answer is an ASG + ALB spanning multiple AZs -- single-AZ is wrong."]
+  },
+  latency: {
+    tips_ko: ["전 세계 사용자가 느림: 캐시 가능한 HTTP→CloudFront, 비-HTTP/고정IP→Global Accelerator, DNS 수준 분배→Route 53 지연시간 라우팅.", "반복 조회가 느림: 범용 캐시는 ElastiCache, DynamoDB 전용은 DAX, 읽기 부하 분산은 읽기 전용 복제본.", "스토리지가 느림: IOPS 부족→gp3 IOPS 상향 또는 io2, 대규모 병렬 처리량→FSx for Lustre."],
+    tips_en: ["Global users, slow: cacheable HTTP -> CloudFront, non-HTTP/static IP -> Global Accelerator, DNS-level -> Route 53 latency routing.", "Repeated reads, slow: ElastiCache (general), DAX (DynamoDB-only), or read replicas to split the load itself.", "Storage, slow: raise gp3 IOPS or move to io2; massive parallel throughput -> FSx for Lustre."]
+  },
+  alb: {
+    tips_ko: ["ALB vs NLB: HTTP/HTTPS·경로 기반·WAF 연동이면 ALB. 고정 IP·TCP/UDP·초저지연 요구는 NLB로 즉시 확정.", "대상으로 EC2·IP·Lambda 지정 가능. Lambda 대상이면 서버 없는 HTTP 엔드포인트 구성.", "ACM 인증서로 HTTPS 종료 + SNI로 리스너 하나에 여러 도메인 인증서 탑재.", "최소 2개 AZ 서브넷 필수. 상태 확인 실패 대상엔 트래픽 안 보냄 = 고가용성 기본 단위."],
+    tips_en: ["ALB vs NLB: HTTP/HTTPS, path routing, WAF -> ALB. Static IP, TCP/UDP, ultra-low latency -> NLB, decisively.", "Targets can be EC2, IPs, or Lambda -- Lambda targets give a serverless HTTP endpoint.", "ACM certificate terminates HTTPS; SNI hosts multiple domain certs on one listener.", "Requires subnets in 2+ AZs and withholds traffic from failed health checks -- the base unit of HA."]
+  },
+  cost: {
+    tips_ko: ["컴퓨팅: 중단 가능·배치→Spot(최대 90%↓). 상시→RI/Savings Plans. 간헐적·예측불가→서버리스.", "스토리지: 접근 빈도 하락→수명주기로 IA/Glacier 전환. 패턴 모름→Intelligent-Tiering. 재생성 가능→One Zone-IA.", "숨은 비용 함정: NAT 게이트웨이 처리 요금, 리전 간 전송, 인터넷 아웃바운드. VPC 엔드포인트·CloudFront로 절감."],
+    tips_en: ["Compute: interruptible batch -> Spot (up to 90% off). Always-on -> RI/Savings Plans. Intermittent -> serverless.", "Storage: declining access -> lifecycle to IA/Glacier. Unknown pattern -> Intelligent-Tiering. Reproducible -> One Zone-IA.", "Hidden costs: NAT processing, cross-Region transfer, internet egress. VPC endpoints and CloudFront cut them."]
+  },
+  hybrid: {
+    tips_ko: ["연결이 목적: 빠르고 저렴→Site-to-Site VPN. 일관된 대역폭·저지연→Direct Connect. VPC 다수→Transit Gateway.", "데이터 이전이 목적: 대역폭 충분→DataSync. 부족→Snowball. 데이터베이스→DMS.", "상시 하이브리드 운영: 로컬 접근 유지+용량 확장→Storage Gateway. AWS 하드웨어가 현장에 필요→Outposts."],
+    tips_en: ["Connectivity goal: quick/cheap -> Site-to-Site VPN. Consistent bandwidth/low latency -> Direct Connect. Many VPCs -> Transit Gateway.", "Data movement goal: enough bandwidth -> DataSync. Not enough -> Snowball. Databases -> DMS.", "Ongoing hybrid: extend capacity with local access -> Storage Gateway. AWS hardware on-site -> Outposts."]
+  },
+  ha: {
+    tips_ko: ["계층별 이중화: 웹/앱→ALB+ASG 다중 AZ. 관계형 DB→RDS Multi-AZ 또는 Aurora. 파일→EFS. 세션→ElastiCache/DynamoDB.", "자주 놓치는 단일 지점: NAT 게이트웨이 1개, Direct Connect 회선 1개, 단일 AZ 서브넷. 각각 AZ별 NAT·VPN 백업·다중 AZ로 해결.", "고가용성 조건이 보이면 단일 지점 장애가 남는 선택지부터 소거하는 게 최속 풀이."],
+    tips_en: ["Redundancy per tier: web/app -> ALB + multi-AZ ASG. Relational DB -> RDS Multi-AZ or Aurora. Files -> EFS. Sessions -> ElastiCache/DynamoDB.", "Commonly missed SPOFs: one NAT gateway, one Direct Connect circuit, single-AZ subnets. Fix with per-AZ NAT, VPN backup, multi-AZ subnets.", "When \"highly available\" appears, eliminate every option leaving a single point of failure first."]
+  },
+  scalab: {
+    tips_ko: ["계층별 확장: 컴퓨팅→ASG나 Lambda. DB→DynamoDB On-Demand나 Aurora Serverless. 부하 흡수→SQS.", "\"예측 불가\", \"급증\", \"수백만 사용자\" 표현이 있으면 고정 용량 선택지는 전부 오답.", "수직 확장(\"더 큰 인스턴스로\")은 상한과 재시작이 있어 확장성 문제의 정답이 되기 어려움 -- 수평 확장 우선."],
+    tips_en: ["Scaling per tier: compute -> ASG or Lambda. Database -> DynamoDB on-demand or Aurora Serverless. Bursts -> SQS.", "\"Unpredictable\", \"spikes\", \"millions of users\" eliminate every fixed-capacity option.", "Vertical scaling (\"bigger instance\") has a ceiling and needs a restart -- rarely the answer. Prefer horizontal scaling."]
+  },
+  apigw: {
+    tips_ko: ["스로틀링: 사용 계획+API 키로 클라이언트별 속도 제한. \"특정 고객이 API 과다 호출\" 문제의 정답.", "권한 부여: 앱 사용자 로그인→Cognito 사용자 풀. 커스텀 토큰 검증→Lambda 권한 부여자. AWS 내부 호출→IAM.", "스테이지 캐싱을 켜면 동일 요청이 백엔드까지 안 가서 지연시간과 Lambda 호출 비용 둘 다 절감."],
+    tips_en: ["Throttling: usage plans + API keys rate-limit per client -- the answer when one customer floods the API.", "Authorization: app user login -> Cognito user pool. Custom token validation -> Lambda authorizer. Internal AWS calls -> IAM.", "Stage caching stops repeat requests reaching the backend, cutting both latency and Lambda invocation cost."]
+  },
+  cloudwatch: {
+    tips_ko: ["메모리·디스크 사용률은 기본 미제공 -- CloudWatch 에이전트 설치해야 수집됨. 자주 나오는 함정.", "알람→자동 대응: SNS 알림, Auto Scaling 정책 실행, EC2 재부팅/종료. EventBridge와 조합하면 Lambda로 임의 조치.", "로그 그룹 보존 기간 기본값은 무기한 -- 비용 문제의 정답은 보존 정책 설정 + 장기 보관은 S3로 내보내기."],
+    tips_en: ["Memory and disk usage are NOT collected by default -- requires the CloudWatch agent. A frequent trap.", "Alarm -> automated action: notify SNS, run an Auto Scaling policy, reboot/terminate EC2. Combine with EventBridge for arbitrary Lambda remediation.", "Log group retention defaults to forever, accumulating cost -- set a retention policy and export long-term logs to S3."]
+  },
+  multiaz: {
+    tips_ko: ["RDS Multi-AZ = 동기 복제 대기 인스턴스 + 자동 장애 조치. 읽기 성능은 개선 안 됨(그건 읽기 전용 복제본의 역할).", "Multi-AZ는 리전 내 이중화일 뿐 -- 리전 전체 장애는 CRR, Aurora Global Database, Route 53 장애 조치로 대비."],
+    tips_en: ["RDS Multi-AZ = a synchronously replicated standby + automatic failover. It does NOT improve read performance -- that is read replicas.", "Multi-AZ only protects within one Region -- surviving a Region failure needs CRR, Aurora Global Database, or Route 53 failover."]
+  },
+  sqs: {
+    tips_ko: ["Standard(거의 무제한 처리량, 순서 미보장, 중복 가능) vs FIFO(순서·정확히 한 번 보장). \"순서대로\"면 FIFO.", "가시성 제한 시간이 처리 시간보다 짧으면 같은 메시지가 중복 처리됨 -- 넉넉하게 설정.", "데드레터 큐: 지정 횟수 실패한 메시지를 격리해 원인 분석. \"실패 메시지 격리\" 문제의 정답.", "큐 깊이를 CloudWatch 지표로 삼아 워커 수를 조정하면 부하에 정확히 비례하는 오토 스케일링이 됨."],
+    tips_en: ["Standard (near-unlimited, unordered, possible duplicates) vs FIFO (ordered, exactly-once). \"Must be in order\" -> FIFO.", "A visibility timeout shorter than processing time causes duplicate processing -- set it generously.", "Dead-letter queue isolates messages that fail repeatedly for analysis -- the answer to \"isolate failed messages\".", "Scaling workers on queue depth (a CloudWatch metric) tracks load precisely."]
+  },
+  encryption: {
+    tips_ko: ["저장 중: S3는 SSE-S3/SSE-KMS(감사 가능)/SSE-C, EBS·RDS·EFS는 생성 시 KMS 키로 활성화. 기존 RDS 암호화는 스냅샷 암호화 복사 후 복원.", "전송 중: ACM 인증서로 HTTPS/TLS 종료. 내부 통신도 암호화 필요하면 대상 그룹까지 HTTPS.", "\"키를 직접 관리·감사·교체\"→고객 관리형 KMS 키. \"AWS도 접근 불가\"·\"FIPS 140-2 Level 3\"→CloudHSM."],
+    tips_en: ["At rest: S3 uses SSE-S3/SSE-KMS (auditable)/SSE-C; EBS, RDS, EFS enable KMS at creation. Encrypting an existing RDS means copy-with-encryption its snapshot, then restore.", "In transit: terminate HTTPS/TLS with ACM. If internal traffic must also be encrypted, HTTPS to the target group too.", "\"We must manage/audit/rotate keys\" -> customer-managed KMS key. \"Not even AWS may access it\" / \"FIPS 140-2 Level 3\" -> CloudHSM."]
+  },
+  compliance: {
+    tips_ko: ["증명 대상별 서비스: \"누가 무엇을 했나\"→CloudTrail. \"설정이 규칙 준수\"→Config. \"S3에 개인정보\"→Macie. \"취약점\"→Inspector.", "불변 보관: S3 Object Lock Compliance 모드나 Glacier Vault Lock -- 보관 기간 내엔 루트 계정도 삭제 불가.", "데이터 상주 요구: 해당 리전에만 저장 + SCP로 리전 간 복제 차단, 필요시 Outposts."],
+    tips_en: ["Service by what must be proven: \"who did what\" -> CloudTrail. \"config follows the rule\" -> Config. \"PII in S3\" -> Macie. \"vulnerabilities\" -> Inspector.", "Immutable retention: S3 Object Lock Compliance mode or Glacier Vault Lock -- not even root can delete within the retention period.", "Data residency: store only in that Region, block cross-Region replication with an SCP, use Outposts if required."]
+  },
+  eventbridge: {
+    tips_ko: ["스케줄 실행: \"매일 밤 2시\", \"1시간마다\" 요구는 EventBridge 스케줄 규칙 + Lambda가 표준 정답. 크론 서버는 오답.", "SNS와 구분: SNS는 단순 팬아웃, EventBridge는 이벤트 내용으로 필터링·변환·라우팅. \"패턴별 다른 처리\"면 EventBridge.", "EC2 상태 변경, Spot 중단 경고, GuardDuty 결과 같은 AWS 이벤트를 잡아 자동 대응 구성."],
+    tips_en: ["Scheduled execution: \"nightly at 2am\" or \"hourly cleanup\" -> an EventBridge schedule rule + Lambda. A cron server is wrong.", "Vs SNS: SNS is simple fan-out; EventBridge filters/transforms/routes on event content. \"Different handling per pattern\" -> EventBridge.", "Captures AWS events (EC2 state changes, Spot interruption, GuardDuty findings) to drive automated response."]
+  },
+  sgnacl: {
+    tips_ko: ["보안 그룹은 상태 저장(인바운드 허용 시 응답 아웃바운드 자동 허용), NACL은 무상태(응답용 임시 포트 1024-65535 아웃바운드 별도 필요).", "보안 그룹엔 거부 규칙이 없음 -- \"특정 IP 차단\" 요구는 반드시 NACL의 Deny 규칙.", "보안 그룹을 소스로 지정(예: 웹 티어 SG를 DB SG의 소스로)하면 IP 몰라도 계층 간 통신만 허용 -- 최소 권한 설계 정석."],
+    tips_en: ["Security groups are stateful (return traffic auto-allowed); NACLs are stateless (need a separate outbound rule for ephemeral ports 1024-65535).", "Security groups have no deny rule -- \"block a specific IP\" always means a NACL deny rule.", "Referencing a security group as the source (e.g. web tier SG in the DB SG rule) permits tier-to-tier traffic without hard-coded IPs."]
+  },
+  readreplica: {
+    tips_ko: ["Multi-AZ(동기, 읽기 안 받음, 가용성)와 읽기 전용 복제본(비동기, 읽기 받음, 성능)을 혼동하지 말 것 -- 요구가 가용성인지 성능인지 먼저 판단.", "리전 간 복제본은 해당 지역 읽기 지연을 줄이고, 승격하면 재해 복구 대상으로도 사용 가능.", "복제본을 만들어도 애플리케이션이 읽기를 복제본 엔드포인트로 보내야 효과 있음. Aurora는 리더 엔드포인트가 자동 분산."],
+    tips_en: ["Do not confuse with Multi-AZ (synchronous, no reads, availability) -- read replicas are asynchronous, serve reads, and address performance. Decide availability vs. performance first.", "A cross-Region replica lowers read latency for local users and can be promoted for disaster recovery.", "The app must actually send reads to the replica endpoint for it to help -- Aurora's reader endpoint balances this automatically."]
+  },
+  subnet: {
+    tips_ko: ["표준 3계층 구성: 퍼블릭 서브넷(ALB, NAT) / 프라이빗 서브넷(앱 서버) / 별도 프라이빗 서브넷(DB), 각 계층 최소 2개 AZ에 복제.", "AWS가 서브넷당 5개 IP를 예약(네트워크 주소·라우터·DNS·예약·브로드캐스트) -- /28이면 사용 가능 주소는 11개뿐.", "RDS를 Multi-AZ로 배포하려면 서로 다른 AZ의 서브넷 2개 이상을 포함하는 DB 서브넷 그룹 필수."],
+    tips_en: ["Standard three-tier layout: public subnet (ALB, NAT) / private subnet (app servers) / separate private subnet (DB), each tier duplicated across 2+ AZs.", "AWS reserves 5 IPs per subnet (network, router, DNS, reserved, broadcast) -- a /28 leaves only 11 usable addresses.", "RDS Multi-AZ requires a DB subnet group with subnets in at least two different AZs."]
+  },
+  sns: {
+    tips_ko: ["팬아웃 패턴: SNS 토픽에 여러 SQS 큐를 구독시키면 각 소비자가 자기 속도로 처리 -- 시험의 대표 정답 구조.", "SQS(하나의 메시지를 하나의 소비자가 가져감) vs SNS(모든 구독자가 동일 메시지 수신) 구분이 핵심.", "구독별 필터 정책으로 관심 있는 메시지만 받게 해 불필요한 처리를 줄임."],
+    tips_en: ["Fan-out pattern: subscribing several SQS queues to one SNS topic lets each consumer process at its own pace -- a signature exam answer.", "Distinguish SQS (one consumer per message) from SNS (every subscriber gets the message).", "Per-subscription filter policies deliver only relevant messages, cutting wasted processing."]
+  },
+  kinesis: {
+    tips_ko: ["Data Streams(밀리초 지연, 커스텀 소비자, 최대 365일 보관) vs Firehose(완전 관리형, S3/Redshift/OpenSearch 자동 적재, 최소 60초 지연). \"실시간 처리\"면 Streams, \"S3 적재만\"이면 Firehose.", "처리량은 샤드 수에 비례 -- \"초당 10만 건\" 같은 조건에서 단일 샤드는 오답. On-Demand 모드는 샤드 관리 자체를 없앰.", "같은 파티션 키의 레코드는 같은 샤드로 들어가 순서 보장 -- 기기별 순서가 중요하면 기기 ID를 파티션 키로."],
+    tips_en: ["Data Streams (millisecond latency, custom consumers, up to 365-day retention) vs Firehose (fully managed, auto-loads to S3/Redshift/OpenSearch, ~60s minimum latency). \"Real-time\" -> Streams; \"just land in S3\" -> Firehose.", "Throughput scales with shard count -- a single shard is wrong for \"100,000 records/sec\". On-demand mode removes shard management.", "Records with the same partition key land on the same shard, preserving order -- use device ID as the key when per-device order matters."]
+  },
+};
+
+/**
  * Question Bank - Realistic SAA-C03 Exam Scenario Questions
  */
 const QUESTION_BANK = [
