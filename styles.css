@@ -1141,8 +1141,10 @@ summary:focus-visible, a:focus-visible, .mm-node:focus-visible {
 }
 .cq-tab-btn:hover { color: var(--ink); }
 .cq-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.cq-tab-btn:disabled { color: var(--ink-3); cursor: not-allowed; opacity: 0.55; }
 
 .cq-panel { display: flex; flex-direction: column; gap: 1.75rem; }
+#cqPracticePanel { gap: 0.75rem; }
 
 .cq-empty-state {
   font-size: 0.88rem;

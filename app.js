@@ -743,14 +743,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // practice bridge: any question tagged with this concept, regardless of
-    // whether it also happens to match a curated AWS_DOMAINS service entry
+    // whether it also happens to match a curated AWS_DOMAINS service entry.
+    // Shown whenever there's EITHER a question to solve OR a curated tip to
+    // read -- a concept with tips but no questions yet would otherwise have
+    // no way to reach its tips at all.
     const curated = findCuratedService(conceptId);
     const conceptQuestions = getAllQuestions().filter(q => (q.conceptIds || []).includes(conceptId));
-    if (conceptQuestions.length > 0) {
+    const curatedTips = curated ? (isKo ? curated.exam_tips_ko : curated.exam_tips_en) : null;
+    const hasTips = !!(curatedTips && curatedTips.length > 0);
+    if (conceptQuestions.length > 0 || hasTips) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'btn-secondary mm-wide-btn';
-      btn.textContent = isKo ? `📝 이 개념 문제 풀기 (${conceptQuestions.length})` : `📝 Practice this concept (${conceptQuestions.length})`;
+      btn.textContent = conceptQuestions.length > 0
+        ? (isKo ? `📝 이 개념 문제 풀기 (${conceptQuestions.length})` : `📝 Practice this concept (${conceptQuestions.length})`)
+        : (isKo ? '🎯 핵심 출제 팁 보기' : '🎯 View Key Exam Tips');
       btn.addEventListener('click', () => openConceptQuestionModal(meta, curated, conceptQuestions));
       panel.appendChild(btn);
     }
@@ -1214,6 +1221,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const hasTips = !!(tips && tips.length > 0);
     el.cqModalTipsWrap.style.display = hasTips ? '' : 'none';
     el.cqTipsEmptyState.style.display = hasTips ? 'none' : '';
+
+    // Practice only makes sense once at least one question is tagged to
+    // this concept; Tips stays reachable either way.
+    el.btnCqTabPractice.disabled = questions.length === 0;
+
     if (tips) {
       tips.forEach(tip => {
         const li = document.createElement('li');
