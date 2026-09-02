@@ -549,6 +549,86 @@ const CONCEPT_EXAM_TIPS = {
     tips_ko: ["Data Streams(밀리초 지연, 커스텀 소비자, 최대 365일 보관) vs Firehose(완전 관리형, S3/Redshift/OpenSearch 자동 적재, 최소 60초 지연). \"실시간 처리\"면 Streams, \"S3 적재만\"이면 Firehose.", "처리량은 샤드 수에 비례 -- \"초당 10만 건\" 같은 조건에서 단일 샤드는 오답. On-Demand 모드는 샤드 관리 자체를 없앰.", "같은 파티션 키의 레코드는 같은 샤드로 들어가 순서 보장 -- 기기별 순서가 중요하면 기기 ID를 파티션 키로."],
     tips_en: ["Data Streams (millisecond latency, custom consumers, up to 365-day retention) vs Firehose (fully managed, auto-loads to S3/Redshift/OpenSearch, ~60s minimum latency). \"Real-time\" -> Streams; \"just land in S3\" -> Firehose.", "Throughput scales with shard count -- a single shard is wrong for \"100,000 records/sec\". On-demand mode removes shard management.", "Records with the same partition key land on the same shard, preserving order -- use device ID as the key when per-device order matters."]
   },
+  storagegw: {
+    tips_ko: ["세 가지 유형: File Gateway(NFS/SMB로 S3), Volume Gateway(iSCSI 블록, 캐시형/저장형), Tape Gateway(백업 소프트웨어용 가상 테이프).", "\"온프레미스 용량 부족하지만 최근 파일은 빠르게 접근\"이 표준 신호 -- 로컬 캐시가 핫 데이터를 담당하고 나머지는 S3/Glacier로.", "기존 백업 소프트웨어는 유지하면서 물리 테이프만 없애라는 요구엔 Tape Gateway가 정답."],
+    tips_en: ["Three types: File Gateway (NFS/SMB into S3), Volume Gateway (iSCSI block, cached or stored), Tape Gateway (virtual tape for existing backup software).", "\"Out of local capacity but recent files must stay fast\" is the standard signal -- the local cache holds hot data while the rest streams to S3/Glacier.", "Keep the existing backup software but remove physical tape -> Tape Gateway is the answer."]
+  },
+  glacier: {
+    tips_ko: ["세 등급: Instant Retrieval(밀리초, 분기별 접근), Flexible Retrieval(분~시간), Deep Archive(약 12시간, 최저가·7~10년 규제 보관).", "Flexible은 90일, Deep Archive는 180일 최소 보관 기간 -- \"30일 후 삭제\" 조건엔 Glacier가 오답.", "Vault Lock을 잠그면 관리자도 못 지우는 WORM 보관 -- SEC 17a-4 같은 규제 준수 문제의 정답."],
+    tips_en: ["Three tiers: Instant Retrieval (milliseconds, quarterly access), Flexible Retrieval (minutes-hours), Deep Archive (~12 hours, cheapest, 7-10 year regulatory retention).", "Flexible bills a 90-day minimum, Deep Archive 180 days -- Glacier is wrong for \"delete after 30 days\".", "A locked Vault Lock policy gives WORM retention even admins cannot delete -- the answer for regulations like SEC 17a-4."]
+  },
+  lifecycle: {
+    tips_ko: ["Transition(더 싼 클래스로 이동)과 Expiration(삭제)은 별개 -- \"7년 보관 후 삭제\"는 둘을 함께 사용.", "Standard-IA/One Zone-IA로 전환은 최소 30일 경과 후만 가능 -- \"업로드 즉시 IA\"는 오답.", "접근 패턴을 안다면 수명주기 규칙이 저렴, 예측 불가면 Intelligent-Tiering이 정답."],
+    tips_en: ["Transition (move to a cheaper class) and expiration (delete) are separate -- \"retain 7 years then delete\" uses both.", "Transition to Standard-IA/One Zone-IA requires 30+ days first -- \"move to IA immediately on upload\" is wrong.", "Known access pattern -> lifecycle rule is cheaper. Unpredictable pattern -> Intelligent-Tiering is the answer."]
+  },
+  iamrole: {
+    tips_ko: ["역할은 임시 자격 증명을 수임(assume)하는 방식 -- 자동 교체·만료되어 액세스 키를 코드에 박아두는 것보다 안전.", "교차 계정 접근: 대상 계정에 신뢰 정책 붙은 역할을 만들고 원본 주체가 수임. 계정마다 사용자 생성이나 키 공유는 오답.", "제3자가 내 계정에 접근할 땐 신뢰 정책에 External ID를 요구해 혼동된 대리인 공격 방지."],
+    tips_en: ["A role is assumed for temporary credentials -- they rotate and expire, safer than hard-coding access keys.", "Cross-account access: create a role with a trust policy in the target account, let the source principal assume it. Per-account users or shared keys are wrong.", "When a third party accesses your account, require an External ID in the trust policy to block confused-deputy attacks."]
+  },
+  vpcendpoint: {
+    tips_ko: ["게이트웨이 엔드포인트(S3·DynamoDB 전용, 라우팅 테이블 항목, 무료) vs 인터페이스 엔드포인트(ENI 생성, 대부분 서비스, 시간당 요금).", "\"인터넷 연결 없이 S3에 접근\"이 나오면 거의 항상 정답 -- NAT/IGW 없이 프라이빗 서브넷에서 AWS 서비스 도달.", "S3로 대량 전송 시 NAT 데이터 처리 요금이 커지는 문제엔 게이트웨이 엔드포인트로 전환하면 그 비용이 사라짐."],
+    tips_en: ["Gateway endpoint (S3/DynamoDB only, route-table entry, free) vs interface endpoint (creates an ENI, most other services, hourly fee).", "\"Access S3 without internet connectivity\" almost always means an endpoint -- private subnets reach AWS services without a NAT or IGW.", "When bulk S3 traffic inflates NAT data-processing charges, switching to a gateway endpoint removes that cost entirely."]
+  },
+  fsx: {
+    tips_ko: ["프로토콜·워크로드로 변형 결정: SMB+Active Directory→Windows File Server, 초당 수백 GB 병렬 처리→Lustre.", "FSx for Windows File Server는 NTFS 권한까지 그대로 지원 -- 온프레미스 윈도우 파일 서버 이전의 정답.", "ONTAP은 NFS·SMB·iSCSI를 동시 제공 + 스냅샷·중복 제거로 기존 NetApp 환경을 그대로 이전할 때 사용."],
+    tips_en: ["Pick the variant by protocol and workload: SMB + Active Directory -> Windows File Server; hundreds of GB/s parallel throughput -> Lustre.", "FSx for Windows File Server preserves NTFS permissions -- the answer for migrating an on-premises Windows file server.", "ONTAP serves NFS, SMB, and iSCSI together with snapshots and dedup, for lifting an existing NetApp estate as-is."]
+  },
+  dr: {
+    tips_ko: ["네 가지 전략(저렴→비쌈): Backup&Restore(수 시간) → Pilot Light(수십 분) → Warm Standby(수 분) → Multi-Site Active-Active(즉시).", "RPO=허용 데이터 손실량, RTO=허용 복구 시간 -- RPO가 거의 0이면 동기/준동기 복제(Aurora Global DB, CRR) 필요.", "요건보다 과한 전략(RTO 24시간인데 Active-Active)도 비용 낭비로 오답 -- 요건을 만족하는 가장 저렴한 전략이 정답."],
+    tips_en: ["Four strategies, cheap to costly: backup & restore (hours) -> pilot light (tens of minutes) -> warm standby (minutes) -> multi-site active-active (instant).", "RPO = tolerable data loss, RTO = tolerable downtime -- a near-zero RPO demands sync/near-sync replication (Aurora Global Database, CRR).", "Over-engineering (active-active for a 24-hour RTO) is also wrong on cost -- pick the cheapest strategy that still meets the requirement."]
+  },
+  s3class: {
+    tips_ko: ["Standard(자주 접근) vs Standard-IA(드물지만 즉시 필요) -- IA는 저장은 싸도 조회 요금이 붙어 자주 읽으면 더 비쌈.", "One Zone-IA는 단일 AZ라 20% 저렴하지만 AZ 소실 시 데이터 소멸 -- 재생성 가능한 데이터에만, \"중요 데이터\"엔 오답.", "접근 패턴이 변하거나 예측 불가하면 Intelligent-Tiering이 정답 신호."],
+    tips_en: ["Standard (frequent access) vs Standard-IA (infrequent but needed instantly) -- IA charges per retrieval, so frequent reads cost more.", "One Zone-IA is ~20% cheaper but loses data if that AZ fails -- only for reproducible data, never for \"critical data\".", "\"Changing or unpredictable access patterns\" signals Intelligent-Tiering."]
+  },
+  organizations: {
+    tips_ko: ["SCP는 권한을 주지 않고 상한선만 정함 -- 실제 권한은 IAM 정책과의 교집합.", "통합 결제로 사용량이 합산되어 볼륨 할인 + RI/Savings Plans 혜택이 계정 간 공유.", "S3 버킷 정책에 aws:PrincipalOrgID 조건 키를 쓰면 계정 목록 관리 없이 조직 구성원만 허용.", "계정 수십 개로 IAM 사용자를 계정마다 만드는 건 오답 -- IAM Identity Center로 한 번 로그인 후 권한 세트 할당이 정답."],
+    tips_en: ["An SCP grants nothing, only caps the ceiling -- effective permission is the intersection with IAM policies.", "Consolidated billing aggregates usage for volume discounts, and RI/Savings Plans benefits are shared across accounts.", "The aws:PrincipalOrgID condition key in a bucket policy admits organization members without maintaining an account list.", "Creating IAM users per account at scale is wrong -- IAM Identity Center with single sign-on and permission sets is the answer."]
+  },
+  datasync: {
+    tips_ko: ["대역폭 충분→DataSync, 부족하거나 수십 TB 이상이라 전송에 몇 주 걸림→Snowball. \"최소 대역폭 사용\"은 Snowball 신호.", "DataSync는 이동(마이그레이션) 도구, Storage Gateway는 계속 로컬처럼 접근하는 상시 관문 -- \"마이그레이션\"이면 DataSync, \"계속 하이브리드\"면 Storage Gateway.", "에이전트를 통해 NFS·SMB·HDFS를 S3·EFS·FSx로 검증·증분 동기화까지 자동 처리."],
+    tips_en: ["Adequate bandwidth -> DataSync. Insufficient bandwidth or tens of TB taking weeks -> Snowball. \"Using the least bandwidth\" signals Snowball.", "DataSync moves data (migration); Storage Gateway keeps providing ongoing local-style access. \"Migrate\" -> DataSync; \"stay hybrid\" -> Storage Gateway.", "An agent moves NFS/SMB/HDFS into S3/EFS/FSx with automatic verification and incremental sync."]
+  },
+  athena: {
+    tips_ko: ["가끔·즉석 쿼리→Athena(클러스터 없음), 지속적 대규모 BI→Redshift. \"on-demand\", \"가끔\", \"간단한 쿼리\"는 Athena 신호.", "S3의 CSV·JSON·Parquet를 옮기지 않고 SQL 질의, 스캔한 데이터량만큼 과금.", "Parquet·ORC 같은 열 기반 형식 압축 + 날짜별 파티셔닝으로 스캔량을 줄이면 비용이 크게 내려감."],
+    tips_en: ["Ad-hoc, occasional queries -> Athena (no cluster). Sustained large-scale BI -> Redshift. \"On-demand\", \"occasionally\", \"simple queries\" signal Athena.", "Runs SQL directly over CSV/JSON/Parquet in S3 without moving data, billed per byte scanned.", "Columnar formats (Parquet, ORC) plus date partitioning slash bytes scanned and cost."]
+  },
+  ssm: {
+    tips_ko: ["Session Manager: 인바운드 포트 없이 IAM 권한만으로 셸 접속 + 세션 로그 -- 배스천 호스트와 22번 포트 제거의 정답.", "Patch Manager: 패치 기준·유지 관리 기간으로 패치 자동화 + 규정 준수 보고서.", "Parameter Store: 설정값·비밀을 계층적으로 저장, SecureString은 KMS 암호화 -- 자동 교체 불필요하면 Secrets Manager보다 저렴."],
+    tips_en: ["Session Manager: shell access via IAM only, no inbound ports, with session logging -- the answer that removes bastion hosts and port 22.", "Patch Manager: automates patching against a baseline during maintenance windows and reports compliance.", "Parameter Store: hierarchical config/secrets storage; SecureString is KMS-encrypted -- cheaper than Secrets Manager when rotation isn't needed."]
+  },
+  nlb: {
+    tips_ko: ["\"방화벽 화이트리스트용 고정 IP\"가 나오면 ALB가 아니라 NLB -- AZ별 Elastic IP 부여 가능.", "MQTT·게임 서버 UDP·DB 프로토콜 같은 비-HTTP 트래픽은 NLB만 처리.", "원본 클라이언트 IP를 그대로 전달 -- X-Forwarded-For 없이도 실제 IP 확인.", "GWLB는 목적이 다름: 트래픽을 방화벽/IDS 같은 서드파티 어플라이언스로 투명하게 통과시키는 인라인 검사용."],
+    tips_en: ["\"A static IP for a firewall whitelist\" means NLB, not ALB -- Elastic IPs can be assigned per AZ.", "Only an NLB balances non-HTTP traffic such as MQTT, game-server UDP, or database protocols.", "An NLB passes the original client IP through -- no X-Forwarded-For needed.", "Gateway Load Balancer serves a different purpose: transparent inline inspection through third-party firewalls/IDS appliances."]
+  },
+  glue: {
+    tips_ko: ["크롤러가 S3를 훑어 테이블 정의를 자동 생성하면 Athena가 바로 질의 가능 -- \"스키마 자동 발견\"이 신호.", "클러스터 관리 없이 ETL만 하면 Glue, Spark/Hadoop을 세밀히 튜닝해야 하면 EMR. 운영 부담 최소화 요구면 Glue.", "Glue Data Catalog는 Athena·Redshift Spectrum이 함께 참조하는 공용 메타데이터 저장소."],
+    tips_en: ["A crawler scans S3 and auto-generates table definitions Athena can query immediately -- \"automatically discover the schema\" is the signal.", "ETL without managing clusters -> Glue. Fine-grained Spark/Hadoop tuning -> EMR. \"Minimize operational overhead\" -> Glue.", "The Glue Data Catalog is the shared metadata store that Athena and Redshift Spectrum both read."]
+  },
+  redshift: {
+    tips_ko: ["\"BI 대시보드\", \"복잡한 조인\", \"과거 데이터 분석\"이 신호 -- OLTP 트랜잭션에는 부적합(RDS/DynamoDB가 정답).", "Redshift Spectrum으로 클러스터에 적재하지 않고 S3 데이터를 직접 조회 -- 웨어하우스+데이터 레이크 동시 질의 및 저장 비용 절감.", "열 기반 저장 + 병렬 처리로 대규모 집계·조인에 최적화, 초당 수천 건 짧은 트랜잭션 처리엔 부적합."],
+    tips_en: ["\"BI dashboards\", \"complex joins\", \"historical analysis\" are the signals -- wrong for OLTP transactions (RDS/DynamoDB instead).", "Redshift Spectrum queries S3 data directly without loading it -- joins warehouse and data lake while cutting storage cost.", "Columnar storage plus massively parallel processing suits heavy aggregation, not high-rate short transactions."]
+  },
+  cloudtrail: {
+    tips_ko: ["\"누가 이 리소스를 삭제했는가\" 유형은 언제나 CloudTrail(감사) -- CloudWatch는 \"얼마나 잘 돌아가나\"(성능·지표)로 구분.", "조직 추적을 켜고 로그를 별도 계정 S3로 보내며 Object Lock + 로그 파일 검증을 적용하면 공격자도 흔적을 못 지움."],
+    tips_en: ["\"Who deleted this resource\" is always CloudTrail (audit) -- CloudWatch answers \"how is it performing\" (metrics) instead.", "An organization trail delivering to S3 in a separate account, with Object Lock and log-file validation, stops an attacker from erasing tracks."]
+  },
+  crossregion: {
+    tips_ko: ["서비스별 복제 수단이 다름: S3→CRR, RDS→리전 간 읽기 복제본, Aurora→Global Database, DynamoDB→Global Tables, AMI/스냅샷→복사.", "데이터 복제만으론 부족 -- 사용자를 보조 리전으로 보내려면 Route 53 장애 조치 라우팅이나 Global Accelerator가 별도로 필요."],
+    tips_en: ["The replication mechanism differs by service: S3 -> CRR, RDS -> cross-Region read replica, Aurora -> Global Database, DynamoDB -> Global Tables, AMIs/snapshots -> copy.", "Replicating data alone is not enough -- shifting users to the secondary Region needs Route 53 failover routing or Global Accelerator on top."]
+  },
+  spot: {
+    tips_ko: ["\"내결함성\", \"중단되어도 재시작 가능\", \"배치 처리\", \"가장 비용 효율적\"이 함께 나오면 거의 항상 Spot이 정답.", "상태 유지 DB, 사용자 대면 트랜잭션, 마감 있는 단일 실행 작업엔 부적합 -- On-Demand나 RI로 전환.", "ASG 혼합 인스턴스 정책으로 기본 용량은 On-Demand, 초과분은 Spot으로 -- 비용 절감과 최소 가용량 보장 동시 달성.", "회수 2분 전 인스턴스 메타데이터·EventBridge로 경고 옴 -- 체크포인트 저장이나 큐 반환 설계 필요."],
+    tips_en: ["\"Fault tolerant\", \"can be restarted\", \"batch\", and \"most cost-effective\" together almost always mean Spot.", "Not for stateful databases, user-facing transactions, or single deadline-bound jobs -- move to On-Demand or Reserved.", "An ASG mixed-instances policy (On-Demand baseline + Spot burst) cuts cost while guaranteeing minimum capacity.", "A reclaim notice arrives 2 minutes early via instance metadata and EventBridge -- design workers to checkpoint or requeue."]
+  },
+  natgw: {
+    tips_ko: ["프라이빗 서브넷의 아웃바운드만 허용, 인바운드는 차단 -- 시간당+데이터 처리 요금이 붙어 비용 문제의 단골 소재.", "AZ에 종속되므로 고가용성을 위해 AZ마다 하나씩, 각 프라이빗 서브넷은 자기 AZ의 NAT로 라우팅 -- 단일 NAT는 그 AZ 장애 시 전체 두절.", "S3·DynamoDB 트래픽은 게이트웨이 VPC 엔드포인트로 우회하면 NAT 데이터 처리 요금 회피.", "NAT 인스턴스는 직접 관리·확장에 단일 장애점 -- 운영 부담 최소화 문제에선 오답."],
+    tips_en: ["Allows outbound only from private subnets, blocks inbound -- bills hourly plus per-GB, a frequent cost-question subject.", "AZ-bound, so deploy one per AZ with each private subnet routed to its own AZ's NAT -- a single NAT breaks everything if that AZ fails.", "Route S3/DynamoDB traffic through a gateway VPC endpoint to avoid NAT data-processing charges.", "NAT instances require manual management/scaling and are a single point of failure -- wrong when minimizing operational overhead."]
+  },
+  sitevpn: {
+    tips_ko: ["\"빠르게 구축\", \"저렴하게\"는 VPN, \"일관된 대역폭\", \"예측 가능한 지연시간\", \"대용량 상시 전송\"은 Direct Connect.", "고객 게이트웨이-가상 프라이빗 게이트웨이 간 IPsec 터널을 몇 시간 안에 구축 -- 인터넷을 타므로 성능은 변동.", "전용선 장애 대비 저비용 이중화로 Direct Connect와 함께 구성하는 것이 권장 패턴."],
+    tips_en: ["\"Set up quickly\" and \"inexpensive\" -> VPN. \"Consistent bandwidth\", \"predictable latency\", \"large sustained transfer\" -> Direct Connect.", "Builds an IPsec tunnel between a customer gateway and virtual private gateway within hours -- performance varies since it rides the internet.", "Running a VPN alongside Direct Connect is the recommended low-cost redundancy if the dedicated line fails."]
+  },
 };
 
 /**
