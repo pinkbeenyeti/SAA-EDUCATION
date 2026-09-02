@@ -555,6 +555,7 @@ summary:focus-visible, a:focus-visible, .mm-node:focus-visible {
 .mm-panel {
   width: 440px;
   flex-shrink: 0;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   background: var(--surface);
@@ -1112,6 +1113,52 @@ summary:focus-visible, a:focus-visible, .mm-node:focus-visible {
   border-top: 1px solid var(--hair);
   background: var(--surface-2);
 }
+
+/* ==========================================================================
+   Concept Question Modal — tips/practice tabs and in-modal quiz
+   ========================================================================== */
+.cq-tabbar {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.85rem 1.6rem 0;
+  border-bottom: 1px solid var(--hair);
+}
+
+.cq-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: inherit;
+  font-size: 0.83rem;
+  font-weight: 500;
+  color: var(--ink-2);
+  background: none;
+  border: none;
+  padding: 0.6rem 0.9rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: var(--t-fast);
+}
+.cq-tab-btn:hover { color: var(--ink); }
+.cq-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.cq-panel { display: flex; flex-direction: column; gap: 1.75rem; }
+
+.cq-practice-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.cq-nav-arrow { flex-shrink: 0; padding: 0.5rem 0.7rem; }
+
+.cq-num-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  flex: 1;
+}
+.cq-num-strip .omr-node { width: 30px; }
 
 .file-dropzone {
   display: block;

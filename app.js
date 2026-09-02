@@ -15,8 +15,12 @@ document.addEventListener('DOMContentLoaded', () => {
     selectedConceptMeta: null,
     selectedCuratedService: null,
     selectedConceptQuestions: [],
+    cqTab: 'tips',
+    cqPractice: { index: 0, userAnswers: {}, revealed: {} },
     examSession: {
       active: false,
+      mode: 'fixed', // 'fixed' | 'infinite'
+      sourcePool: null, // infinite mode only: pool to keep drawing random questions from
       questions: [],
       currentIndex: 0,
       userAnswers: {}, // { [questionIdx]: selectedOptionIdx }
@@ -24,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
       revealed: {},    // { [questionIdx]: boolean }
       timeRemaining: 0,
       totalTime: 0,
+      elapsedSeconds: 0,
       timerInterval: null,
       isSubmitted: false
     },
@@ -76,6 +81,18 @@ document.addEventListener('DOMContentLoaded', () => {
     cqModalTipsList: document.getElementById('cqModalTipsList'),
     cqModalQuestionList: document.getElementById('cqModalQuestionList'),
     btnStartConceptQuiz: document.getElementById('btnStartConceptQuiz'),
+    btnCqTabTips: document.getElementById('btnCqTabTips'),
+    btnCqTabPractice: document.getElementById('btnCqTabPractice'),
+    cqTipsPanel: document.getElementById('cqTipsPanel'),
+    cqPracticePanel: document.getElementById('cqPracticePanel'),
+    cqNumStrip: document.getElementById('cqNumStrip'),
+    btnCqPrevQuestion: document.getElementById('btnCqPrevQuestion'),
+    btnCqNextQuestion: document.getElementById('btnCqNextQuestion'),
+    cqLblQuestionNumber: document.getElementById('cqLblQuestionNumber'),
+    cqLblQuestionScenario: document.getElementById('cqLblQuestionScenario'),
+    cqOptionsContainer: document.getElementById('cqOptionsContainer'),
+    cqExplanationBox: document.getElementById('cqExplanationBox'),
+    cqLblExplanationText: document.getElementById('cqLblExplanationText'),
 
     // Exam View
     examSetupScreen: document.getElementById('examSetupScreen'),
@@ -96,6 +113,8 @@ document.addEventListener('DOMContentLoaded', () => {
     btnPrevQuestion: document.getElementById('btnPrevQuestion'),
     btnNextQuestion: document.getElementById('btnNextQuestion'),
     btnSubmitExam: document.getElementById('btnSubmitExam'),
+    lblSubmitExamText: document.getElementById('lblSubmitExamText'),
+    iconSubmitExam: document.getElementById('iconSubmitExam'),
     examTimerDisplay: document.getElementById('examTimerDisplay'),
     omrGridContainer: document.getElementById('omrGridContainer'),
     lblOmrProgress: document.getElementById('lblOmrProgress'),
@@ -1159,12 +1178,25 @@ document.addEventListener('DOMContentLoaded', () => {
     state.selectedConceptMeta = meta;
     state.selectedCuratedService = curated;
     state.selectedConceptQuestions = questions;
+    state.cqTab = 'tips';
+    state.cqPractice = { index: 0, userAnswers: {}, revealed: {} };
     renderConceptQuestionModalContent();
     el.modalConceptQuestions.classList.add('active');
   }
 
   function closeConceptQuestionModal() {
     el.modalConceptQuestions.classList.remove('active');
+  }
+
+  // Switches between the "Key Exam Tips" tab and the in-modal "Practice" tab
+  // without ever leaving the modal or the mindmap tab.
+  function setCqTab(tab) {
+    state.cqTab = tab;
+    el.btnCqTabTips.classList.toggle('active', tab === 'tips');
+    el.btnCqTabPractice.classList.toggle('active', tab === 'practice');
+    el.cqTipsPanel.style.display = tab === 'tips' ? '' : 'none';
+    el.cqPracticePanel.style.display = tab === 'practice' ? '' : 'none';
+    if (tab === 'practice') renderCqPracticePanel();
   }
 
   function renderConceptQuestionModalContent() {
@@ -1192,8 +1224,8 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // Question list, each with its own "풀기" button that jumps straight
-    // into a single-question exam session.
+    // Question list, each with its own "풀기" button that jumps straight to
+    // that question inside the in-modal Practice tab (no tab/page navigation).
     el.cqModalQuestionList.innerHTML = '';
     questions.forEach((q, i) => {
       const card = document.createElement('div');
@@ -1206,45 +1238,134 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.className = 'btn-secondary';
       btn.textContent = isKo ? '풀기' : 'Solve';
       btn.addEventListener('click', () => {
-        closeConceptQuestionModal();
-        switchTab('exam');
-        startExam([q]);
+        state.cqPractice.index = i;
+        setCqTab('practice');
       });
       card.appendChild(btn);
       el.cqModalQuestionList.appendChild(card);
     });
+
+    setCqTab(state.cqTab || 'tips');
+  }
+
+  // In-modal practice: solve every question tagged to this concept, with
+  // number/prev/next navigation, right inside the mindmap tab's modal.
+  function renderCqPracticePanel() {
+    const questions = state.selectedConceptQuestions || [];
+    const practice = state.cqPractice;
+    if (!practice) return;
+    const isKo = state.currentLang === 'ko';
+
+    if (questions.length === 0) {
+      el.cqNumStrip.innerHTML = '';
+      el.cqLblQuestionNumber.textContent = '';
+      el.cqLblQuestionScenario.textContent = isKo ? '이 개념에 연결된 문제가 아직 없습니다.' : 'No questions linked to this concept yet.';
+      el.cqOptionsContainer.innerHTML = '';
+      el.cqExplanationBox.style.display = 'none';
+      el.btnCqPrevQuestion.disabled = true;
+      el.btnCqNextQuestion.disabled = true;
+      return;
+    }
+
+    if (practice.index >= questions.length) practice.index = 0;
+    const idx = practice.index;
+    const q = questions[idx];
+
+    el.cqLblQuestionNumber.textContent = isKo ? `문제 ${idx + 1} / ${questions.length}` : `Q. ${idx + 1} / ${questions.length}`;
+    el.cqLblQuestionScenario.textContent = isKo ? q.question_ko : q.question_en;
+
+    el.cqNumStrip.innerHTML = '';
+    questions.forEach((_, i) => {
+      const node = document.createElement('div');
+      node.className = 'omr-node';
+      node.textContent = i + 1;
+      if (i === idx) node.classList.add('current');
+      if (practice.userAnswers[i] !== undefined) node.classList.add('answered');
+      node.addEventListener('click', () => {
+        practice.index = i;
+        renderCqPracticePanel();
+      });
+      el.cqNumStrip.appendChild(node);
+    });
+
+    el.cqOptionsContainer.innerHTML = '';
+    const options = isKo ? q.options_ko : q.options_en;
+    const selected = practice.userAnswers[idx];
+    const isRevealed = practice.revealed[idx];
+
+    options.forEach((optText, optIdx) => {
+      const optItem = document.createElement('div');
+      optItem.className = 'option-item';
+      if (selected === optIdx) optItem.classList.add('selected');
+      if (isRevealed) {
+        if (optIdx === q.answer) {
+          optItem.classList.add('correct');
+        } else if (selected === optIdx && selected !== q.answer) {
+          optItem.classList.add('wrong');
+        }
+      }
+      const markerLetter = String.fromCharCode(65 + optIdx);
+      optItem.innerHTML = `
+        <div class="option-marker">${markerLetter}</div>
+        <div class="option-text">${optText}</div>
+      `;
+      optItem.addEventListener('click', () => {
+        practice.userAnswers[idx] = optIdx;
+        practice.revealed[idx] = true;
+        renderCqPracticePanel();
+      });
+      el.cqOptionsContainer.appendChild(optItem);
+    });
+
+    if (isRevealed) {
+      el.cqExplanationBox.style.display = 'block';
+      el.cqLblExplanationText.textContent = isKo ? q.explanation_ko : q.explanation_en;
+    } else {
+      el.cqExplanationBox.style.display = 'none';
+    }
+
+    el.btnCqPrevQuestion.disabled = idx === 0;
+    el.btnCqNextQuestion.disabled = idx === questions.length - 1;
   }
 
   // ==========================================================================
   // Exam Simulator Engine
   // ==========================================================================
-  function startExam(customQuestionList = null) {
+  function startExam(customQuestionList = null, options = {}) {
+    const infinite = !!options.infinite;
     const allQuestions = getAllQuestions();
     let questionsPool = [];
+    let sourcePool = null; // infinite mode only: pool to keep drawing random questions from
 
     if (customQuestionList && customQuestionList.length > 0) {
-      questionsPool = [...customQuestionList];
+      if (infinite) {
+        sourcePool = [...customQuestionList];
+        questionsPool = shuffleArray(sourcePool).slice(0, Math.min(20, sourcePool.length));
+      } else {
+        questionsPool = [...customQuestionList];
+      }
     } else {
       const selectedDomain = el.selectExamDomain.value;
-      if (selectedDomain === 'all') {
-        questionsPool = [...allQuestions];
-      } else {
-        questionsPool = allQuestions.filter(q => q.domain_id === selectedDomain);
-      }
+      const domainPool = selectedDomain === 'all' ? [...allQuestions] : allQuestions.filter(q => q.domain_id === selectedDomain);
 
-      const count = parseInt(el.selectExamCount.value, 10) || 20;
-      const wanted = Math.min(count, questionsPool.length);
-      const short = count - wanted;
-      questionsPool = shuffleArray(questionsPool).slice(0, wanted);
-      // the bank used to be silently truncated — say so instead
-      if (short > 0) {
-        alert(state.currentLang === 'ko'
-          ? `요청한 ${count}문항 중 ${wanted}문항만 출제됩니다.\n선택한 범위의 문제은행에 ${wanted}문제밖에 없습니다.`
-          : `Only ${wanted} of the ${count} requested questions are available in this bank.`);
+      if (infinite) {
+        sourcePool = domainPool;
+        questionsPool = shuffleArray(sourcePool).slice(0, Math.min(20, sourcePool.length));
+      } else {
+        const count = parseInt(el.selectExamCount.value, 10) || 20;
+        const wanted = Math.min(count, domainPool.length);
+        const short = count - wanted;
+        questionsPool = shuffleArray(domainPool).slice(0, wanted);
+        // the bank used to be silently truncated — say so instead
+        if (short > 0) {
+          alert(state.currentLang === 'ko'
+            ? `요청한 ${count}문항 중 ${wanted}문항만 출제됩니다.\n선택한 범위의 문제은행에 ${wanted}문제밖에 없습니다.`
+            : `Only ${wanted} of the ${count} requested questions are available in this bank.`);
+        }
       }
     }
 
-    if (questionsPool.length === 0) {
+    if ((infinite && (!sourcePool || sourcePool.length === 0)) || (!infinite && questionsPool.length === 0)) {
       alert(state.currentLang === 'ko' ? '선택한 조건의 문제가 없습니다.' : 'No questions found for the selected filter.');
       return;
     }
@@ -1254,12 +1375,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // position alone scores a pass. Also protects against biased imported dumps.
     questionsPool = questionsPool.map(withShuffledOptions);
 
-    // Calculate time: standard 2 minutes per question
-    const timeMinutes = Math.min(130, Math.max(10, Math.round(questionsPool.length * 2)));
-    const totalSeconds = timeMinutes * 60;
+    // Calculate time: standard 2 minutes per question. Infinite mode has no
+    // fixed length, so it runs with no countdown at all.
+    const timeMinutes = infinite ? 0 : Math.min(130, Math.max(10, Math.round(questionsPool.length * 2)));
+    const totalSeconds = infinite ? 0 : timeMinutes * 60;
 
     state.examSession = {
       active: true,
+      mode: infinite ? 'infinite' : 'fixed',
+      sourcePool,
       questions: questionsPool,
       currentIndex: 0,
       userAnswers: {},
@@ -1267,9 +1391,12 @@ document.addEventListener('DOMContentLoaded', () => {
       revealed: {},
       timeRemaining: totalSeconds,
       totalTime: totalSeconds,
+      elapsedSeconds: 0,
       timerInterval: null,
       isSubmitted: false
     };
+
+    updateSubmitButtonLabel();
 
     // UI screen toggle
     el.examSetupScreen.style.display = 'none';
@@ -1282,19 +1409,58 @@ document.addEventListener('DOMContentLoaded', () => {
     renderOmrSheet();
   }
 
+  // Infinite mode draws one more random question from the session's source
+  // pool instead of running out — avoids repeating the question just shown
+  // when the pool has more than one candidate.
+  function growInfiniteSession(session) {
+    if (!session.sourcePool || session.sourcePool.length === 0) return;
+    const last = session.questions[session.questions.length - 1];
+    let candidate = session.sourcePool[Math.floor(Math.random() * session.sourcePool.length)];
+    if (session.sourcePool.length > 1) {
+      let guard = 0;
+      while (last && candidate.id === last.id && guard < 10) {
+        candidate = session.sourcePool[Math.floor(Math.random() * session.sourcePool.length)];
+        guard++;
+      }
+    }
+    session.questions.push(withShuffledOptions(candidate));
+  }
+
+  // Relabels the submit button "시험 강제 종료 / End Session" in infinite
+  // mode (there is no fixed end to "submit"), vs. the normal fixed-length
+  // "최종 답안 제출 / Submit Exam" wording.
+  function updateSubmitButtonLabel() {
+    const infinite = state.examSession.mode === 'infinite';
+    const isKo = state.currentLang === 'ko';
+    if (el.lblSubmitExamText) {
+      el.lblSubmitExamText.setAttribute('data-ko', infinite ? '시험 강제 종료' : '최종 답안 제출');
+      el.lblSubmitExamText.setAttribute('data-en', infinite ? 'End Session' : 'Submit Exam');
+      el.lblSubmitExamText.textContent = isKo ? el.lblSubmitExamText.getAttribute('data-ko') : el.lblSubmitExamText.getAttribute('data-en');
+    }
+    if (el.iconSubmitExam) {
+      el.iconSubmitExam.textContent = infinite ? '🛑' : '🏁';
+    }
+  }
+
   function startExamTimer() {
-    if (state.examSession.timerInterval) {
-      clearInterval(state.examSession.timerInterval);
+    const session = state.examSession;
+    if (session.timerInterval) {
+      clearInterval(session.timerInterval);
     }
 
     updateTimerDisplay();
 
-    state.examSession.timerInterval = setInterval(() => {
-      if (state.examSession.timeRemaining > 0) {
-        state.examSession.timeRemaining--;
+    session.timerInterval = setInterval(() => {
+      session.elapsedSeconds++;
+      if (session.mode === 'infinite') {
+        updateTimerDisplay();
+        return;
+      }
+      if (session.timeRemaining > 0) {
+        session.timeRemaining--;
         updateTimerDisplay();
       } else {
-        clearInterval(state.examSession.timerInterval);
+        clearInterval(session.timerInterval);
         alert(state.currentLang === 'ko' ? '시험 시간이 종료되었습니다! 자동 채점됩니다.' : 'Time is up! Submitting answers automatically.');
         submitExam();
       }
@@ -1302,12 +1468,21 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function updateTimerDisplay() {
-    const mins = Math.floor(state.examSession.timeRemaining / 60);
-    const secs = state.examSession.timeRemaining % 60;
+    const session = state.examSession;
+    if (session.mode === 'infinite') {
+      const mins = Math.floor(session.elapsedSeconds / 60);
+      const secs = session.elapsedSeconds % 60;
+      el.examTimerDisplay.textContent = `∞ ${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      el.examTimerDisplay.classList.remove('warning');
+      return;
+    }
+
+    const mins = Math.floor(session.timeRemaining / 60);
+    const secs = session.timeRemaining % 60;
     const str = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     el.examTimerDisplay.textContent = str;
 
-    if (state.examSession.timeRemaining <= 300) {
+    if (session.timeRemaining <= 300) {
       el.examTimerDisplay.classList.add('warning');
     } else {
       el.examTimerDisplay.classList.remove('warning');
@@ -1320,7 +1495,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const q = session.questions[idx];
     const isKo = state.currentLang === 'ko';
 
-    el.lblQuestionNumber.textContent = `Q. ${idx + 1} / ${session.questions.length}`;
+    el.lblQuestionNumber.textContent = session.mode === 'infinite'
+      ? (isKo ? `문제 ${idx + 1} (무한 모드)` : `Q. ${idx + 1} (Infinite Mode)`)
+      : `Q. ${idx + 1} / ${session.questions.length}`;
     el.lblQuestionDomain.textContent = (q.domain_id || 'General').toUpperCase();
     el.lblQuestionScenario.textContent = isKo ? q.question_ko : q.question_en;
 
@@ -1378,9 +1555,10 @@ document.addEventListener('DOMContentLoaded', () => {
       el.questionExplanationBox.style.display = 'none';
     }
 
-    // Navigation buttons state
+    // Navigation buttons state -- infinite mode can always advance (it draws
+    // another random question on demand instead of running out).
     el.btnPrevQuestion.disabled = idx === 0;
-    el.btnNextQuestion.disabled = idx === session.questions.length - 1;
+    el.btnNextQuestion.disabled = session.mode !== 'infinite' && idx === session.questions.length - 1;
   }
 
   function renderOmrSheet() {
@@ -1471,7 +1649,7 @@ document.addEventListener('DOMContentLoaded', () => {
     el.statCorrectCount.textContent = correctCount;
     el.statIncorrectCount.textContent = totalQuestions - correctCount;
 
-    const timeSpentSec = session.totalTime - session.timeRemaining;
+    const timeSpentSec = session.elapsedSeconds;
     const spentMins = Math.floor(timeSpentSec / 60);
     const spentSecs = timeSpentSec % 60;
     el.statTimeSpent.textContent = `${spentMins}분 ${spentSecs}초`;
@@ -1667,25 +1845,50 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.target === el.modalConceptQuestions) closeConceptQuestionModal();
     });
 
-    // Start bulk practice on every question tagged to the selected concept
+    // Tips <-> Practice tab switch, in-modal question navigation
+    el.btnCqTabTips.addEventListener('click', () => setCqTab('tips'));
+    el.btnCqTabPractice.addEventListener('click', () => setCqTab('practice'));
+
+    el.btnCqPrevQuestion.addEventListener('click', () => {
+      if (state.cqPractice.index > 0) {
+        state.cqPractice.index--;
+        renderCqPracticePanel();
+      }
+    });
+    el.btnCqNextQuestion.addEventListener('click', () => {
+      const total = (state.selectedConceptQuestions || []).length;
+      if (state.cqPractice.index < total - 1) {
+        state.cqPractice.index++;
+        renderCqPracticePanel();
+      }
+    });
+
+    // Jump straight into the in-modal Practice tab for every question
+    // tagged to the selected concept -- no tab/page navigation involved.
     el.btnStartConceptQuiz.addEventListener('click', () => {
       const questions = state.selectedConceptQuestions || [];
       if (questions.length === 0) return;
-      closeConceptQuestionModal();
-      switchTab('exam');
-      startExam(questions);
+      state.cqPractice.index = 0;
+      setCqTab('practice');
     });
 
     // Exam Controls
-    el.btnStartExam.addEventListener('click', () => startExam());
+    el.btnStartExam.addEventListener('click', () => {
+      startExam(null, { infinite: el.selectExamCount.value === 'infinite' });
+    });
 
     // Local-only dump practice
     if (el.btnStartLocalDumpExam) {
       el.btnStartLocalDumpExam.addEventListener('click', () => {
-        const count = parseInt(el.selectLocalDumpCount.value, 10) || 20;
-        const wanted = Math.min(count, LOCAL_DUMP_BANK.length);
+        const val = el.selectLocalDumpCount.value;
         switchTab('exam');
-        startExam(shuffleArray(LOCAL_DUMP_BANK).slice(0, wanted));
+        if (val === 'infinite') {
+          startExam(LOCAL_DUMP_BANK, { infinite: true });
+        } else {
+          const count = parseInt(val, 10) || 20;
+          const wanted = Math.min(count, LOCAL_DUMP_BANK.length);
+          startExam(shuffleArray(LOCAL_DUMP_BANK).slice(0, wanted));
+        }
       });
     }
 
@@ -1711,19 +1914,32 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     el.btnNextQuestion.addEventListener('click', () => {
-      if (state.examSession.currentIndex < state.examSession.questions.length - 1) {
-        state.examSession.currentIndex++;
+      const session = state.examSession;
+      if (session.mode === 'infinite' && session.currentIndex === session.questions.length - 1) {
+        growInfiniteSession(session);
+      }
+      if (session.currentIndex < session.questions.length - 1) {
+        session.currentIndex++;
         renderCurrentQuestion();
         renderOmrSheet();
       }
     });
 
     el.btnSubmitExam.addEventListener('click', () => {
-      const unanswered = state.examSession.questions.filter((_, idx) => state.examSession.userAnswers[idx] === undefined).length;
+      const session = state.examSession;
       const isKo = state.currentLang === 'ko';
-      const confirmMsg = unanswered > 0 
-        ? (isKo ? `아직 풀지 않은 문제가 ${unanswered}개 있습니다. 정말로 제출하시겠습니까?` : `You have ${unanswered} unanswered questions. Submit anyway?`)
-        : (isKo ? '모든 답안을 제출하시겠습니까?' : 'Do you want to submit your final answers?');
+      let confirmMsg;
+      if (session.mode === 'infinite') {
+        const answered = session.questions.filter((_, idx) => session.userAnswers[idx] !== undefined).length;
+        confirmMsg = isKo
+          ? `지금까지 푼 ${answered}문제를 기준으로 채점하고 시험을 종료합니다. 계속할까요?`
+          : `This will end the session and score your ${answered} answered question(s) so far. Continue?`;
+      } else {
+        const unanswered = session.questions.filter((_, idx) => session.userAnswers[idx] === undefined).length;
+        confirmMsg = unanswered > 0
+          ? (isKo ? `아직 풀지 않은 문제가 ${unanswered}개 있습니다. 정말로 제출하시겠습니까?` : `You have ${unanswered} unanswered questions. Submit anyway?`)
+          : (isKo ? '모든 답안을 제출하시겠습니까?' : 'Do you want to submit your final answers?');
+      }
 
       if (confirm(confirmMsg)) {
         submitExam();
