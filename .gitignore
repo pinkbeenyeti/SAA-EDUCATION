@@ -1,0 +1,53 @@
+# IDE
+.idea/
+.vscode/
+
+# Node (only used by scripts/ for the verification harness)
+node_modules/
+package-lock.json
+
+# Python
+__pycache__/
+*.pyc
+
+# Source dump PDF and the raw question text derived from it — copyrighted
+# ExamTopics dump content, needed locally by scripts/answer_dual.py but must
+# never be shipped in the public site or committed. Regenerate dump.js with
+# scripts/generate.py; dump-answered.js with scripts/build_local_dump_bank.py.
+# NOTE: knowledge.js is NOT included here on purpose — it only holds concept
+# IDs, generic AWS service names, and co-occurrence counts (structural/factual
+# graph data, not the dump's question text), and it powers the public mindmap
+# tab, so it must ship and be committed like any other app file.
+*.pdf
+dump.js
+dump-ko.js
+dump-answered.js
+
+# Pipeline artifacts that quote or closely paraphrase copyrighted exam-question
+# text (ExamTopics dump stems via their rationale fields, or AWS's own official
+# sample questions in calibration-set.json) -- these never get shipped to the
+# site, but they also must never enter git history. Purely-original-content
+# artifacts (gen-*.json from the new-question generator, gen-plan.json) are NOT
+# listed here on purpose; only re-add them if they start embedding quoted
+# source-question text.
+scripts/calibration-set.json
+scripts/calibration-results*.json
+scripts/p[0-9]*-results.json
+scripts/done-so-far.json
+scripts/currency-check.json
+
+# Leftover debug artifacts from an earlier session (progress logs + raw
+# pipeline result dumps) sitting at the project root instead of scripts/ --
+# same dump-derived-rationale risk as the p*-results.json files above.
+scratchpad_p4_*.json
+scratchpad_p4_*.log
+
+# Scratch output
+scripts/out/
+
+# Working files for the original-question generation pipeline (drafts, pools,
+# verification, originality-check reports, priority plans). Original content,
+# not a copyright concern -- excluded purely as disposable build intermediates
+# that would otherwise churn on every batch run. The actual output of this
+# pipeline lives in data.js once scripts/merge_generated.py --commit runs.
+scripts/gen-*.json

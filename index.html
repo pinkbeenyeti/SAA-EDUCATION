@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS SAA-C03 Study Hub Pro | Solutions Architect Associate</title>
+  <meta name="description" content="Interactive Mindmap, Exam Simulator, and Smart Flashcards for AWS Certified Solutions Architect - Associate (SAA-C03).">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Latin from Inter, Korean from Noto Sans KR. On Apple hardware the stack in
+       styles.css resolves to the real SF Pro / Apple SD Gothic Neo first. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-layout">
+    
+    <!-- Top Navigation Bar -->
+    <header class="navbar">
+      <div class="brand-section" id="navBrandLogo">
+        <div class="brand-logo">☁️</div>
+        <div class="brand-info">
+          <h1>AWS SAA Hub Pro <span class="badge-version">SAA-C03</span></h1>
+          <p id="txtSubHeader">Solutions Architect Associate Master Suite</p>
+        </div>
+      </div>
+
+      <nav class="nav-tabs">
+        <button class="nav-tab-btn active" data-tab="mindmap">
+          <span>🗺️</span> <span class="tab-label" data-ko="마인드맵" data-en="Mindmap">마인드맵</span>
+        </button>
+        <button class="nav-tab-btn" data-tab="exam">
+          <span>📝</span> <span class="tab-label" data-ko="실전 모의고사" data-en="Exam Simulator">실전 모의고사</span>
+        </button>
+        <button class="nav-tab-btn" data-tab="incorrect">
+          <span>📌</span> <span class="tab-label" data-ko="오답노트" data-en="Incorrect Notes">오답노트</span>
+          <span class="badge-counter" id="incorrectBadgeCount" style="display: none;">0</span>
+        </button>
+        <!-- Only shown when dump-answered.js is present -- a local-only build
+             artifact, gitignored, never shipped on the public site. -->
+        <button class="nav-tab-btn" data-tab="localdump" id="navTabLocalDump" style="display: none;">
+          <span>🗄️</span> <span class="tab-label" data-ko="기출 모의고사 (로컬)" data-en="Dump Practice (Local)">기출 모의고사 (로컬)</span>
+        </button>
+      </nav>
+
+      <div class="nav-actions">
+        <button class="btn-secondary" id="btnOpenDumpModal" title="Import 650 Dump Questions JSON">
+          <span>📥</span> <span class="btn-label" data-ko="덤프 임포트" data-en="Import Dump">덤프 임포트</span>
+        </button>
+        
+        <button class="lang-toggle-btn" id="btnGlobalLangToggle" title="Toggle Language (한/영)">
+          🌐 <span id="currentLangDisplay"><span class="lang-active">KO</span> / EN</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main View Container -->
+    <main class="main-view-container">
+
+      <!-- ==========================================
+           TAB 1: Interactive Mindmap View
+           ========================================== -->
+      <section id="viewMindmap" class="tab-view active">
+        <!-- Toolbar & Filter -->
+        <div class="kg-toolbar">
+          <div class="domain-filter-group" id="domainFilterPills">
+            <!-- Category pills injected by app.js from KG_CATEGORIES -->
+          </div>
+
+          <div class="kg-controls">
+            <div class="search-box">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="inputMindmapSearch" placeholder="개념 검색 (예: EC2, S3, 비용 최적화...)" autocomplete="off">
+            </div>
+
+            <div class="btn-group">
+              <button class="btn-quiet" id="btnMmSummary" title="분류별로 가장 많이 출제되는 개념만 보여줍니다">
+                <span data-ko="요약 보기" data-en="Summary">요약 보기</span>
+              </button>
+              <button class="btn-quiet" id="btnMmExpandAll" title="모든 분류의 개념을 펼칩니다">
+                <span data-ko="가지 펼치기" data-en="Expand">가지 펼치기</span>
+              </button>
+              <button class="btn-quiet" id="btnMmCollapseAll" title="모두 접습니다">
+                <span data-ko="접기" data-en="Collapse">접기</span>
+              </button>
+              <button class="btn-quiet" id="btnMmFit" title="화면에 맞춥니다">
+                <span data-ko="화면 맞춤" data-en="Fit">화면 맞춤</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tree stage: canvas + reading panel -->
+        <div class="kg-stage">
+          <div class="mm-canvas-wrapper" id="mmCanvasWrapper">
+            <div class="mm-viewport" id="mmViewport">
+              <svg id="mmSvg" aria-hidden="true"></svg>
+              <div class="mm-nodes" id="mmNodes"></div>
+            </div>
+            <div class="mm-hud" id="mmHud"></div>
+            <div class="mm-hint">
+              <span data-ko="마디를 누르면 가지가 펼쳐지고 오른쪽에 설명이 나옵니다 · 휠=확대, 빈 곳 드래그=이동" data-en="Click a node to expand it and read about it on the right · wheel to zoom, drag to pan">마디를 누르면 가지가 펼쳐지고 오른쪽에 설명이 나옵니다 · 휠=확대, 빈 곳 드래그=이동</span>
+            </div>
+          </div>
+
+          <aside class="mm-panel" id="mmPanel">
+            <!-- Concept detail injected by app.js -->
+          </aside>
+        </div>
+      </section>
+
+      <!-- ==========================================
+           TAB 2: Exam Simulator View
+           ========================================== -->
+      <section id="viewExam" class="tab-view">
+        <!-- Setup Screen -->
+        <div id="examSetupScreen">
+          <div class="exam-header-banner">
+            <div class="exam-intro">
+              <h2 id="txtExamTitle">AWS SAA-C03 실전 모의고사</h2>
+              <p id="txtExamDesc">실전 시험과 동일한 시나리오 기반 문항으로 실력을 점검하고 합격 가능성을 진단하세요.</p>
+            </div>
+            
+            <div class="exam-config-bar">
+              <select id="selectExamCount" class="config-selector">
+                <option value="10">10 문항 (빠른 스피드 퀴즈)</option>
+                <option value="20" selected>20 문항 (핵심 모의고사)</option>
+                <option value="65">65 문항 (실전 130분 실전 시험)</option>
+              </select>
+
+              <select id="selectExamDomain" class="config-selector">
+                <option value="all">모든 도메인 종합</option>
+                <option value="compute">Compute 도메인 집중</option>
+                <option value="storage">Storage 도메인 집중</option>
+                <option value="database">Database 도메인 집중</option>
+                <option value="networking">Networking 도메인 집중</option>
+                <option value="security">Security 도메인 집중</option>
+              </select>
+
+              <button class="btn-primary" id="btnStartExam">
+                <span>🚀</span> <span data-ko="시험 시작하기" data-en="Start Exam">시험 시작하기</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- In-Progress Screen -->
+        <div id="examInProgressScreen" style="display: none;">
+          <div class="exam-in-progress">
+            <!-- Left Main Question Card -->
+            <div class="exam-main-panel">
+              <div class="question-card" id="activeQuestionCard">
+                <div class="question-card-header">
+                  <div class="question-meta">
+                    <span class="q-number" id="lblQuestionNumber">Q. 1 / 20</span>
+                    <span class="q-difficulty" id="lblQuestionDomain">Compute</span>
+                  </div>
+                  <button class="btn-flag" id="btnToggleFlag">
+                    <span>🚩</span> <span id="lblFlagText">검토 표시</span>
+                  </button>
+                </div>
+
+                <div class="question-text" id="lblQuestionScenario">
+                  <!-- Scenario text -->
+                </div>
+
+                <div class="options-list" id="optionsContainer">
+                  <!-- Dynamic Options -->
+                </div>
+
+                <div class="explanation-box" id="questionExplanationBox" style="display: none;">
+                  <div class="explanation-title">
+                    <span>💡</span> <span data-ko="정답 및 상세 해설" data-en="Answer & Detailed Explanation">정답 및 상세 해설</span>
+                  </div>
+                  <div class="explanation-content" id="lblExplanationText"></div>
+                </div>
+              </div>
+
+              <!-- Exam Navigation -->
+              <div class="exam-nav-bar">
+                <button class="btn-secondary" id="btnPrevQuestion">
+                  <span>←</span> <span data-ko="이전 문제" data-en="Previous">이전 문제</span>
+                </button>
+                <div style="display: flex; gap: 0.75rem;">
+                  <button class="btn-secondary" id="btnShowExplanation">
+                    <span>💡</span> <span data-ko="해설 보기" data-en="Show Explanation">해설 보기</span>
+                  </button>
+                  <button class="btn-secondary" id="btnNextQuestion">
+                    <span data-ko="다음 문제" data-en="Next">다음 문제</span> <span>→</span>
+                  </button>
+                  <button class="btn-primary" id="btnSubmitExam">
+                    <span>🏁</span> <span data-ko="최종 답안 제출" data-en="Submit Exam">최종 답안 제출</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Sidebar: Timer & OMR Sheet -->
+            <aside class="exam-sidebar-panel">
+              <div class="timer-card">
+                <div class="timer-title" data-ko="남은 시간" data-en="Time Remaining">남은 시간</div>
+                <div class="timer-display" id="examTimerDisplay">130:00</div>
+              </div>
+
+              <div class="omr-sheet-card">
+                <div class="omr-sheet-title">
+                  <span data-ko="OMR 답안 현황" data-en="Answer Sheet">OMR 답안 현황</span>
+                  <span id="lblOmrProgress" style="font-size: 0.75rem; color: var(--accent-aws);">0 / 20</span>
+                </div>
+                <div class="omr-grid" id="omrGridContainer">
+                  <!-- Dynamic OMR Nodes -->
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
+
+        <!-- Result Screen -->
+        <div id="examResultScreen" style="display: none;">
+          <div class="exam-result-card">
+            <div id="resultStatusBadge" class="result-status-badge pass">합격 (PASS)</div>
+            <div class="score-main" id="lblFinalScore">860 / 1000</div>
+            <p class="score-meta" id="lblScoreMeta">합격 기준: 720점 이상 (총 20문제 중 17문제 정답 - 85%)</p>
+
+            <div class="score-breakdown-grid">
+              <div class="breakdown-stat-box">
+                <div class="stat-val" id="statCorrectCount" style="color: var(--accent-emerald);">17</div>
+                <div class="stat-lbl" data-ko="정답 문항" data-en="Correct">정답 문항</div>
+              </div>
+              <div class="breakdown-stat-box">
+                <div class="stat-val" id="statIncorrectCount" style="color: var(--color-security);">3</div>
+                <div class="stat-lbl" data-ko="오답 문항" data-en="Incorrect">오답 문항</div>
+              </div>
+              <div class="breakdown-stat-box">
+                <div class="stat-val" id="statTimeSpent">14분 20초</div>
+                <div class="stat-lbl" data-ko="소요 시간" data-en="Time Taken">소요 시간</div>
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: center; gap: 1rem;">
+              <button class="btn-primary" id="btnRestartExam">
+                <span>🔄</span> <span data-ko="새 모의고사 응시" data-en="Take New Exam">새 모의고사 응시</span>
+              </button>
+              <button class="btn-secondary" id="btnGoToIncorrectNotes">
+                <span>📌</span> <span data-ko="오답노트 확인하기" data-en="Review Incorrect Notes">오답노트 확인하기</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==========================================
+           TAB 3: Incorrect Notes View
+           ========================================== -->
+      <section id="viewIncorrect" class="tab-view">
+        <div class="incorrect-notes-header">
+          <div>
+            <h2 id="txtIncorrectHeading" style="font-size: 1.4rem; font-weight: 800; color: var(--text-highlight);">
+              📌 오답 노트 및 취약점 분석
+            </h2>
+            <p id="txtIncorrectSubHeading" style="color: var(--text-muted); font-size: 0.9rem;">
+              모의고사에서 틀린 문제를 복습하고 핵심 출제 포인트를 완전히 숙지하세요.
+            </p>
+          </div>
+
+          <div style="display: flex; gap: 0.75rem;">
+            <button class="btn-secondary" id="btnClearAllIncorrect">
+              <span>🗑️</span> <span data-ko="오답노트 비우기" data-en="Clear All Notes">오답노트 비우기</span>
+            </button>
+            <button class="btn-primary" id="btnRetakeIncorrectExam">
+              <span>🎯</span> <span data-ko="오답만 다시 풀기" data-en="Retake Incorrect Only">오답만 다시 풀기</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="incorrect-list" id="incorrectListContainer">
+          <!-- Dynamic Incorrect Cards -->
+        </div>
+      </section>
+
+      <!-- ==========================================
+           TAB 4: Local-only Dump Practice View
+           Only reachable when dump-answered.js is present on disk (a
+           gitignored build artifact -- see scripts/build_local_dump_bank.py).
+           Never shipped on the public deployment.
+           ========================================== -->
+      <section id="viewLocalDump" class="tab-view">
+        <div class="exam-header-banner">
+          <div class="exam-intro">
+            <h2>기출 모의고사 (로컬 전용)</h2>
+            <p>ExamTopics 원본 덤프 문제 + 이 프로젝트의 AI 검증 파이프라인이 도출한 정답/해설입니다. 로컬 개발 환경에서만 보이며, 배포된 사이트에는 포함되지 않습니다.</p>
+          </div>
+          <div class="exam-config-bar">
+            <select id="selectLocalDumpCount" class="config-selector">
+              <option value="10">10 문항</option>
+              <option value="20" selected>20 문항</option>
+              <option value="50">50 문항</option>
+            </select>
+            <button class="btn-primary" id="btnStartLocalDumpExam">
+              <span>🚀</span> <span>시작하기</span>
+            </button>
+          </div>
+          <p id="txtLocalDumpCount" style="color: var(--text-muted); font-size: 0.85rem;"></p>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="site-footer">
+      <span>&copy; 2026 AWS SAA Hub Pro</span>
+      <span class="dot">&middot;</span>
+      <a href="privacy.html">개인정보처리방침</a>
+      <span class="dot">&middot;</span>
+      <a href="terms.html">이용약관</a>
+      <span class="dot">&middot;</span>
+      <a href="mailto:rbgusdn123@naver.com">문의</a>
+    </footer>
+
+    <!-- ==========================================
+         Concept Question Modal — lists questions tagged to one
+         mindmap concept, with per-question and bulk "solve" actions.
+         ========================================== -->
+    <div class="modal-overlay" id="modalConceptQuestions">
+      <div class="inspector-modal">
+        <div class="inspector-header">
+          <div class="inspector-title-area">
+            <span class="inspector-icon" id="cqModalIcon">📘</span>
+            <div>
+              <h2 id="cqModalTitle">Amazon EC2</h2>
+              <span class="service-badge" id="cqModalBadge">3 questions</span>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <button class="lang-toggle-btn" id="btnCqModalLangToggle">
+              🌐 <span id="cqModalLangDisplay">KO / EN</span>
+            </button>
+            <button class="close-btn" id="btnCloseConceptQuestions">&times;</button>
+          </div>
+        </div>
+
+        <div class="inspector-body">
+          <div id="cqModalTipsWrap">
+            <div class="inspector-section-title">
+              <span>🎯</span> <span data-ko="SAA-C03 시험 핵심 출제 팁 (Key Exam Tips)" data-en="Key SAA-C03 Exam Tips">SAA-C03 시험 핵심 출제 팁 (Key Exam Tips)</span>
+            </div>
+            <ul class="exam-tips-list" id="cqModalTipsList">
+              <!-- Exam Tips, only when this concept maps to a curated service -->
+            </ul>
+          </div>
+
+          <div>
+            <div class="inspector-section-title">
+              <span>📝</span> <span data-ko="이 개념과 연결된 문제" data-en="Questions tagged to this concept">이 개념과 연결된 문제</span>
+            </div>
+            <div id="cqModalQuestionList">
+              <!-- Question cards, each with its own "풀기" button -->
+            </div>
+          </div>
+        </div>
+
+        <div class="inspector-footer">
+          <button class="btn-secondary" id="btnCloseConceptQuestionsFooter" data-ko="닫기" data-en="Close">닫기</button>
+          <button class="btn-primary" id="btnStartConceptQuiz">
+            <span>📝</span> <span data-ko="전체 문제 풀기" data-en="Practice all matched questions">전체 문제 풀기</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================
+         Dump Importer Modal
+         ========================================== -->
+    <div class="modal-overlay" id="modalDumpImporter">
+      <div class="inspector-modal" style="max-width: 650px;">
+        <div class="inspector-header">
+          <div class="inspector-title-area">
+            <span class="inspector-icon">📥</span>
+            <div>
+              <h2 data-ko="650문제 덤프 JSON 가져오기" data-en="Import 650 Question Dump JSON">650문제 덤프 JSON 가져오기</h2>
+              <span class="service-badge" data-ko="NotebookLM / Custom JSON 지원" data-en="NotebookLM / Custom JSON Compatible">NotebookLM / Custom JSON 지원</span>
+            </div>
+          </div>
+          <button class="close-btn" id="btnCloseDumpModal">&times;</button>
+        </div>
+
+        <div class="inspector-body">
+          <p style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.5;" data-ko="아래 텍스트 영역에 SAA 기출 덤프 JSON 데이터를 직접 붙여넣거나 .json 파일을 업로드하세요. 로컬 스토리지에 즉시 병합되어 모의고사에 반영됩니다." data-en="Paste SAA question dump JSON or upload a .json file. Imported questions are safely merged into your local storage.">
+            아래 텍스트 영역에 SAA 기출 덤프 JSON 데이터를 직접 붙여넣거나 .json 파일을 업로드하세요. 로컬 스토리지에 즉시 병합되어 모의고사에 반영됩니다.
+          </p>
+
+          <label class="file-dropzone" for="fileDumpUpload">
+            <span style="font-size: 1.5rem;">📂</span>
+            <div style="font-weight: 600; margin-top: 0.25rem;" data-ko=".json 파일 선택 또는 드래그" data-en="Choose or Drop .json file">.json 파일 선택 또는 드래그</div>
+            <input type="file" id="fileDumpUpload" accept=".json" style="display: none;">
+          </label>
+
+          <textarea id="txtDumpJsonInput" class="dump-modal-textarea" placeholder='[
+  {
+    "id": "custom_q1",
+    "question_ko": "EC2 문제 내용...",
+    "question_en": "EC2 Question Scenario...",
+    "options_ko": ["보기 1", "보기 2", "보기 3", "보기 4"],
+    "options_en": ["Option 1", "Option 2", "Option 3", "Option 4"],
+    "answer": 0,
+    "explanation_ko": "정답 해설...",
+    "explanation_en": "Explanation..."
+  }
+]'></textarea>
+        </div>
+
+        <div class="inspector-footer">
+          <button class="btn-secondary" id="btnDumpLoadSample" data-ko="샘플 템플릿 채우기" data-en="Load Sample Template">샘플 템플릿 채우기</button>
+          <button class="btn-primary" id="btnExecuteDumpImport">
+            <span>💾</span> <span data-ko="문제 뱅크에 추가하기" data-en="Import to Question Bank">문제 뱅크에 추가하기</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Scripts -->
+  <script src="data.js"></script>
+  <script src="knowledge.js"></script>
+  <script src="concepts.js"></script>
+  <script src="concepts-deep.js"></script>
+  <!-- Local-only, gitignored -- 404s harmlessly in production (see app.js init) -->
+  <script src="dump-answered.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
