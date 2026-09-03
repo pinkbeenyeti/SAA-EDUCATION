@@ -1306,6 +1306,19 @@ summary:focus-visible, a:focus-visible, .mm-node:focus-visible {
 .option-item.wrong { background: var(--red-tint); border-color: var(--red); }
 .option-item.wrong .option-marker { background: var(--red); color: #fff; border-color: transparent; }
 
+.option-item-multi .option-marker { border-radius: 6px; }
+.option-item-multi.option-disabled { opacity: 0.5; cursor: not-allowed; }
+
+.multi-answer-hint {
+  font-size: 0.82rem;
+  color: var(--ink-2);
+  background: var(--surface-2);
+  border: 1px dashed var(--hair);
+  border-radius: var(--r-md);
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
 .explanation-box {
   margin-top: 1.5rem;
   background: var(--surface-3);

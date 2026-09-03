@@ -1416,17 +1416,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const options = isKo ? q.options_ko : q.options_en;
     const selected = practice.userAnswers[idx];
     const isRevealed = practice.revealed[idx];
+    const isMulti = isMultiAnswer(q);
+    const selectedList = isMulti ? (Array.isArray(selected) ? selected : []) : null;
+
+    if (isMulti) {
+      const hint = document.createElement('div');
+      hint.className = 'multi-answer-hint';
+      hint.textContent = isKo
+        ? `정답 ${q.answer.length}개를 선택하세요 (${selectedList.length}/${q.answer.length})`
+        : `Select ${q.answer.length} correct answers (${selectedList.length}/${q.answer.length})`;
+      el.cqOptionsContainer.prepend(hint);
+    }
 
     options.forEach((optText, optIdx) => {
       const optItem = document.createElement('div');
       optItem.className = 'option-item';
-      if (selected === optIdx) optItem.classList.add('selected');
+      const isSelected = isMulti ? selectedList.includes(optIdx) : selected === optIdx;
+      if (isSelected) optItem.classList.add('selected');
+      if (isMulti) optItem.classList.add('option-item-multi');
       if (isRevealed) {
-        if (optIdx === q.answer) {
+        const isCorrectOpt = isMulti ? q.answer.includes(optIdx) : optIdx === q.answer;
+        if (isCorrectOpt) {
           optItem.classList.add('correct');
-        } else if (selected === optIdx && selected !== q.answer) {
+        } else if (isSelected) {
           optItem.classList.add('wrong');
         }
+      }
+      if (isMulti && !isSelected && selectedList.length >= q.answer.length) {
+        optItem.classList.add('option-disabled');
       }
       const markerLetter = String.fromCharCode(65 + optIdx);
       optItem.innerHTML = `
@@ -1434,7 +1451,20 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="option-text">${optText}</div>
       `;
       optItem.addEventListener('click', () => {
-        practice.userAnswers[idx] = optIdx;
+        if (isMulti) {
+          const current = Array.isArray(practice.userAnswers[idx]) ? practice.userAnswers[idx].slice() : [];
+          const pos = current.indexOf(optIdx);
+          if (pos >= 0) {
+            current.splice(pos, 1);
+          } else if (current.length < q.answer.length) {
+            current.push(optIdx);
+          } else {
+            return; // capacity reached: ignore clicks on unselected options
+          }
+          practice.userAnswers[idx] = current;
+        } else {
+          practice.userAnswers[idx] = optIdx;
+        }
         practice.revealed[idx] = true;
         renderCqPracticePanel();
       });
@@ -1643,21 +1673,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const options = isKo ? q.options_ko : q.options_en;
     const currentSelected = session.userAnswers[idx];
     const isRevealed = session.revealed[idx] || session.isSubmitted;
+    const isMulti = isMultiAnswer(q);
+    const selectedList = isMulti ? (Array.isArray(currentSelected) ? currentSelected : []) : null;
+
+    if (isMulti) {
+      const hint = document.createElement('div');
+      hint.className = 'multi-answer-hint';
+      hint.textContent = isKo
+        ? `정답 ${q.answer.length}개를 선택하세요 (${selectedList.length}/${q.answer.length})`
+        : `Select ${q.answer.length} correct answers (${selectedList.length}/${q.answer.length})`;
+      el.optionsContainer.prepend(hint);
+    }
 
     options.forEach((optText, optIdx) => {
       const optItem = document.createElement('div');
       optItem.className = 'option-item';
 
-      if (currentSelected === optIdx) {
+      const isSelected = isMulti ? selectedList.includes(optIdx) : currentSelected === optIdx;
+      if (isSelected) {
         optItem.classList.add('selected');
       }
+      if (isMulti) optItem.classList.add('option-item-multi');
 
       if (isRevealed) {
-        if (optIdx === q.answer) {
+        const isCorrectOpt = isMulti ? q.answer.includes(optIdx) : optIdx === q.answer;
+        if (isCorrectOpt) {
           optItem.classList.add('correct');
-        } else if (currentSelected === optIdx && currentSelected !== q.answer) {
+        } else if (isSelected) {
           optItem.classList.add('wrong');
         }
+      }
+
+      if (isMulti && !isSelected && selectedList.length >= q.answer.length) {
+        optItem.classList.add('option-disabled');
       }
 
       const markerLetter = String.fromCharCode(65 + optIdx); // A, B, C, D
@@ -1668,7 +1716,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (!session.isSubmitted) {
         optItem.addEventListener('click', () => {
-          session.userAnswers[idx] = optIdx;
+          if (isMulti) {
+            const current = Array.isArray(session.userAnswers[idx]) ? session.userAnswers[idx].slice() : [];
+            const pos = current.indexOf(optIdx);
+            if (pos >= 0) {
+              current.splice(pos, 1);
+            } else if (current.length < q.answer.length) {
+              current.push(optIdx);
+            } else {
+              return; // capacity reached: ignore clicks on unselected options
+            }
+            session.userAnswers[idx] = current;
+          } else {
+            session.userAnswers[idx] = optIdx;
+          }
           // Infinite mode is a flashcard-style drill: show right/wrong and
           // the explanation the instant an option is picked, no separate
           // "Show Explanation" click needed.
@@ -1766,7 +1827,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     session.questions.forEach((q, idx) => {
       const userAns = session.userAnswers[idx];
-      if (userAns === q.answer) {
+      if (gradeAnswer(q, userAns)) {
         correctCount++;
       } else {
         wrongQuestions.push({
@@ -1878,11 +1939,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const card = document.createElement('div');
       card.className = 'incorrect-card';
 
-      const userAnsText = item.userAnswer !== undefined 
-        ? (isKo ? q.options_ko[item.userAnswer] : q.options_en[item.userAnswer])
+      const optionList = isKo ? q.options_ko : q.options_en;
+      const userAnsText = item.userAnswer !== undefined
+        ? (Array.isArray(item.userAnswer)
+            ? item.userAnswer.map(i => optionList[i]).join(', ')
+            : optionList[item.userAnswer])
         : (isKo ? '미응답' : 'Unanswered');
-      
-      const correctAnsText = isKo ? q.options_ko[q.answer] : q.options_en[q.answer];
+
+      const correctAnsText = Array.isArray(q.answer)
+        ? q.answer.map(i => optionList[i]).join(', ')
+        : optionList[q.answer];
 
       card.innerHTML = `
         <div class="incorrect-card-top">
@@ -2193,17 +2259,46 @@ document.addEventListener('DOMContentLoaded', () => {
     const ko = Array.isArray(q.options_ko) ? q.options_ko : [];
     const en = Array.isArray(q.options_en) ? q.options_en : [];
     const n = Math.max(ko.length, en.length);
-    if (n < 2 || typeof q.answer !== 'number') return q;
+    const multi = isMultiAnswer(q);
+    if (n < 2 || (multi ? q.answer.length === 0 : typeof q.answer !== 'number')) return q;
 
     const order = shuffleArray(Array.from({ length: n }, (_, i) => i));
-    const newAnswer = order.indexOf(q.answer);
-    if (newAnswer < 0) return q;   // answer out of range: leave it untouched
+    const newAnswer = multi ? q.answer.map(a => order.indexOf(a)) : order.indexOf(q.answer);
+    const isOutOfRange = multi ? newAnswer.some(a => a < 0) : newAnswer < 0;
+    if (isOutOfRange) return q;   // answer out of range: leave it untouched
 
     return Object.assign({}, q, {
       options_ko: order.map(i => ko[i]),
       options_en: order.map(i => en[i]),
       answer: newAnswer
     });
+  }
+
+  /**
+   * True when a question defines multiple correct options (answer is an
+   * array of indices) rather than the single-answer default (answer is a
+   * number).
+   */
+  function isMultiAnswer(q) {
+    return Array.isArray(q.answer);
+  }
+
+  /**
+   * Grades a user's selection against a question's answer key. Single-answer
+   * questions compare scalars directly (unchanged behavior). Multi-answer
+   * questions require an all-or-nothing exact match of the selected index
+   * set against the correct index set -- no partial credit, order-independent.
+   */
+  function gradeAnswer(q, userSel) {
+    if (!isMultiAnswer(q)) return userSel === q.answer;
+    if (!Array.isArray(userSel) || userSel.length !== q.answer.length) return false;
+    const correctSet = new Set(q.answer);
+    const selSet = new Set(userSel);
+    if (selSet.size !== correctSet.size) return false;
+    for (const v of selSet) {
+      if (!correctSet.has(v)) return false;
+    }
+    return true;
   }
 
   function shuffleArray(arr) {
