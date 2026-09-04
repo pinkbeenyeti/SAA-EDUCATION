@@ -629,6 +629,158 @@ const CONCEPT_EXAM_TIPS = {
     tips_ko: ["\"빠르게 구축\", \"저렴하게\"는 VPN, \"일관된 대역폭\", \"예측 가능한 지연시간\", \"대용량 상시 전송\"은 Direct Connect.", "고객 게이트웨이-가상 프라이빗 게이트웨이 간 IPsec 터널을 몇 시간 안에 구축 -- 인터넷을 타므로 성능은 변동.", "전용선 장애 대비 저비용 이중화로 Direct Connect와 함께 구성하는 것이 권장 패턴."],
     tips_en: ["\"Set up quickly\" and \"inexpensive\" -> VPN. \"Consistent bandwidth\", \"predictable latency\", \"large sustained transfer\" -> Direct Connect.", "Builds an IPsec tunnel between a customer gateway and virtual private gateway within hours -- performance varies since it rides the internet.", "Running a VPN alongside Direct Connect is the recommended low-cost redundancy if the dedicated line fails."]
   },
+  guardduty: {
+    tips_ko: ["탐지만 하고 차단은 안 함 -- 자동 대응까지 필요하면 EventBridge로 결과를 받아 Lambda를 실행하는 조합까지 답에 포함해야 함.", "비슷한 서비스 구분: 위협 탐지→GuardDuty, S3 민감정보 탐지→Macie, EC2·컨테이너 취약점 스캔→Inspector, 리소스 설정 준수→Config."],
+    tips_en: ["Detects but never blocks -- automated response needs EventBridge routing findings to a Lambda function.", "Distinguishing similar services: threats -> GuardDuty. Sensitive data in S3 -> Macie. EC2/container vulnerability scanning -> Inspector. Resource config compliance -> Config."]
+  },
+  inspector: {
+    tips_ko: ["소프트웨어 취약점(CVE) 스캔이 대상 -- \"버킷 암호화 여부\" 같은 설정 규칙 검사는 Config의 몫, 서로 바꿔치기가 단골 오답.", "EC2·ECR 컨테이너 이미지·Lambda 함수를 지속적·자동으로 스캔 -- 별도 스캐너 설치·운영 없이 취약점을 찾아야 하면 정답."],
+    tips_en: ["Scans for software vulnerabilities (CVEs) -- config rules like \"is the bucket encrypted\" belong to Config; swapping the two is a classic distractor.", "Continuously and automatically scans EC2, ECR container images, and Lambda functions -- the answer whenever vulnerabilities must be found without running your own scanner."]
+  },
+  dax: {
+    tips_ko: ["DynamoDB 전용 캐시 -- RDS나 다른 소스를 캐싱해야 하면 ElastiCache가 정답, DAX는 대상이 아님.", "읽기 집중·동일 아이템 반복 조회에서 마이크로초 지연시간이 필요할 때 정답. 쓰기 위주면 무효화 부담으로 이득이 줄어드는 게 함정."],
+    tips_en: ["DynamoDB-only cache -- caching RDS or another source needs ElastiCache, not DAX.", "The answer for read-heavy, repeated-item access needing microsecond latency. Write-heavy workloads lose the benefit to invalidation overhead -- a common trap."]
+  },
+  shield: {
+    tips_ko: ["Shield Standard는 모든 계정에 무료·자동 적용 -- 그냥 \"DDoS 방어\"만 있으면 이미 충족된 상태라 추가 조치가 정답이 아닐 수 있음.", "\"DDoS 대응팀\", \"공격으로 인한 확장 비용 환급\", \"24/7 전담 지원\" 같은 문구가 나와야 Shield Advanced가 정답."],
+    tips_en: ["Shield Standard is free and automatic for every account -- plain \"DDoS protection\" is already satisfied, no extra action needed.", "Shield Advanced is the answer only when \"DDoS response team\", \"cost protection for attack-driven scaling\", or \"24/7 dedicated support\" is explicit."]
+  },
+  cognito: {
+    tips_ko: ["사용자 풀(로그인·가입 처리, 토큰 발급)과 자격 증명 풀(그 토큰을 AWS 임시 자격 증명으로 교환)은 서로 다른 구성 요소 -- 둘 다 필요한 시나리오가 많음.", "Google·Facebook·Apple 소셜 로그인이나 SAML 기반 사내 SSO 연동이 언급되면 Cognito가 정답."],
+    tips_en: ["A user pool (sign-up/sign-in, issues tokens) and an identity pool (exchanges those tokens for temporary AWS credentials) are separate pieces -- many scenarios need both.", "Cognito is the answer whenever Google/Facebook/Apple social sign-in or SAML enterprise SSO is mentioned."]
+  },
+  quicksight: {
+    tips_ko: ["\"대시보드\", \"차트\", \"비즈니스 사용자가 직접 탐색\" 같은 시각화 요구가 신호 -- 실제 쿼리·처리는 Athena나 Redshift가 담당하고 QuickSight는 그 위의 시각화 계층.", "서버 관리 없이 서비스형으로 제공되는 BI 도구라, \"운영 부담 최소화\" 조건과 함께 자주 출제됨."],
+    tips_en: ["The signal is a visualization need -- \"dashboard\", \"charts\", \"business users self-serve\". The actual querying is done by Athena or Redshift underneath; QuickSight is the layer on top.", "It is serverless BI with no infrastructure to manage, so it pairs often with a \"least operational overhead\" requirement."]
+  },
+  opensearch: {
+    tips_ko: ["가끔 실행하는 SQL 쿼리는 Athena, 상시 인덱싱된 즉시 검색·대시보드가 필요하면 OpenSearch -- 상시 가동 클러스터라 비용이 더 높다는 게 트레이드오프.", "Kinesis Data Firehose를 OpenSearch로 바로 연결하면 코드 없이 실시간 로그 검색 파이프라인을 구성할 수 있음."],
+    tips_en: ["Occasional SQL queries -> Athena. Continuously indexed, instantly searchable dashboards -> OpenSearch, which runs an always-on cluster and costs more.", "Pointing Kinesis Data Firehose at OpenSearch builds a real-time log search pipeline with no code."]
+  },
+  costmgmt: {
+    tips_ko: ["도구별 역할: 추세 분석·예측→Cost Explorer, 임계값 초과 알림→Budgets, 원시 청구 데이터 분석→Cost and Usage Report.", "Budgets는 실제 지출뿐 아니라 예측 지출 기준으로도 알림을 보낼 수 있다는 게 자주 놓치는 포인트.", "비용 배분 태그를 활성화하면 부서·프로젝트별 지출을 나눠볼 수 있음 -- \"어느 팀이 얼마 썼는지\" 문제의 정답."],
+    tips_en: ["Tool by job: trend/forecast -> Cost Explorer. Alert on exceeding a threshold -> Budgets. Raw billing data for analysis -> Cost and Usage Report.", "A frequently missed point: Budgets can alert on forecasted spend, not only actual spend.", "Activating cost allocation tags splits spend by department or project -- the answer to \"which team spent what\"."]
+  },
+  transferfamily: {
+    tips_ko: ["SFTP·FTPS·FTP 엔드포인트를 관리형으로 제공해 EC2에 직접 서버를 운영하는 것보다 운영 부담이 훨씬 낮다는 게 핵심 비교축.", "인증을 IAM이나 기존 사내 디렉터리(AD 등)에 연동할 수 있고, 업로드된 파일은 그대로 S3(또는 EFS)에 저장됨."],
+    tips_en: ["Managed SFTP/FTPS/FTP endpoints beat running your own server on EC2 on operational overhead -- the core comparison.", "Authentication can tie into IAM or an existing directory (e.g. AD), and uploaded files land straight in S3 (or EFS)."]
+  },
+  stepfunctions: {
+    tips_ko: ["Standard(최대 1년 실행, 사람 승인 대기 같은 장시간 워크플로) vs Express(짧고 고빈도 이벤트 처리) -- 지속 시간과 빈도로 구분.", "람다들이 서로를 직접 호출하며 에러 처리를 손코딩하는 구조의 대안 -- 재시도·분기·관찰 가능성이 필요하면 정답."],
+    tips_en: ["Standard (up to a year, long waits like human approval) vs Express (short, high-volume) -- pick by duration and frequency.", "The alternative to Lambdas invoking each other with hand-written error handling -- the answer when retries, branching, and observability matter."]
+  },
+  leastpriv: {
+    tips_ko: ["\"AdministratorAccess 부여\", \"Action:*, Resource:*\", \"버킷을 퍼블릭으로\", \"루트 계정 자격 증명 사용\" 같은 선택지는 거의 항상 오답.", "리소스 ARN 특정, 조건 키(SourceIp·PrincipalOrgID·MFA), 권한 경계, SCP를 조합해 범위를 좁히는 선택지가 정답 패턴."],
+    tips_en: ["Options like \"attach AdministratorAccess\", \"Action:*/Resource:*\", \"make the bucket public\", or \"use root credentials\" are almost always wrong.", "The right pattern narrows scope with specific ARNs, condition keys (SourceIp/PrincipalOrgID/MFA), permission boundaries, and SCPs."]
+  },
+  batch: {
+    tips_ko: ["컴퓨팅 환경을 Spot으로 설정하면 야간 렌더링·시뮬레이션 같은 대량 배치 작업 비용을 크게 낮출 수 있음 -- \"최저 비용의 야간 배치\" 문제의 정답.", "Lambda와의 경계: 짧고 이벤트 기반이면 Lambda, 몇 시간씩 걸리고 의존성이 있는 대량 작업이면 Batch."],
+    tips_en: ["Configuring the compute environment for Spot cuts cost on large batch jobs like overnight rendering or simulation -- the answer to \"lowest-cost overnight batch\".", "Boundary with Lambda: short and event-driven -> Lambda. Hours-long, bulk, dependency-heavy jobs -> Batch."]
+  },
+  ses: {
+    tips_ko: ["SNS(운영자·소수 구독자에게 보내는 알림)와 SES(고객 대상 서식 있는 대량 이메일 발송·수신)를 구분하는 게 핵심.", "대량 마케팅·트랜잭션 이메일(영수증, 알림 메일)을 애플리케이션에서 프로그래밍 방식으로 보내야 하면 SES가 정답."],
+    tips_en: ["The key distinction: SNS notifies a small operator/subscriber list; SES sends and receives formatted bulk email to customers.", "SES is the answer for programmatically sending bulk marketing or transactional email (receipts, notifications) from an application."]
+  },
+  trustedadvisor: {
+    tips_ko: ["비용·보안·성능·내결함성 전반을 자동 점검해 권장 사항을 제시 -- 별도 도구 설치 없이 \"현황 점검\"이 필요할 때 정답 후보.", "무료 체크는 일부(개방된 보안 그룹 등)뿐이고, 전체 체크 항목은 Business·Enterprise 지원 플랜이 있어야 활성화됨 -- 지원 플랜 조건이 답을 가르는 단서."],
+    tips_en: ["Automatically checks cost, security, performance, and fault tolerance and surfaces recommendations -- a candidate whenever \"review current state\" is needed with no extra tooling.", "Only a subset of checks (e.g. open security groups) is free; the full check set requires Business or Enterprise Support -- the support-plan condition is the deciding clue."]
+  },
+  placement: {
+    tips_ko: ["Cluster: 단일 AZ에 인스턴스를 밀집 배치해 최저 지연·최대 대역폭 확보(HPC·ML 학습용) -- 대신 AZ 장애 시 전체가 함께 죽음.", "Spread: 서로 다른 랙(별도 전원·네트워크)에 배치, AZ당 최대 7대 -- 소수의 핵심 인스턴스를 물리적으로 격리할 때.", "Partition: 하드웨어를 공유하지 않는 파티션 단위로 그룹화 -- HDFS·HBase·Cassandra처럼 파티션마다 복제본을 두는 분산 시스템에 적합."],
+    tips_en: ["Cluster: packs instances into one AZ for lowest latency/highest bandwidth (HPC, ML training) -- but an AZ failure takes everything down together.", "Spread: places instances on distinct racks (separate power/network), max 7 per AZ -- for physically isolating a small number of critical instances.", "Partition: groups instances into hardware-isolated partitions -- fits distributed systems like HDFS, HBase, Cassandra that place replicas per partition."]
+  },
+  documentdb: {
+    tips_ko: ["\"MongoDB\"가 문제에 명시돼야 진짜 후보 -- 그냥 \"NoSQL\"이나 \"유연한 스키마\"만 있으면 DynamoDB가 정답일 가능성이 더 높은, 오답 함정으로 자주 쓰임.", "기존 MongoDB 워크로드를 코드 변경 없이 관리형으로 옮기는 시나리오에 적합."],
+    tips_en: ["A real candidate only when \"MongoDB\" is explicit -- plain \"NoSQL\" or \"flexible schema\" alone usually points to DynamoDB instead, a common distractor use.", "Fits migrating an existing MongoDB workload to a managed service without rewriting the application."]
+  },
+  mq: {
+    tips_ko: ["신규로 설계하는 시스템이면 SQS·SNS가 확장성과 비용에서 기본 정답 -- MQ는 예외 케이스.", "\"기존 메시지 브로커를 코드 변경 없이 그대로 이전\", \"JMS·AMQP·MQTT 프로토콜 필요\"가 명시될 때만 MQ가 정답."],
+    tips_en: ["For a system designed from scratch, SQS/SNS is the default answer on scale and cost -- MQ is the exception.", "MQ is the answer only when \"lift an existing broker with no code changes\" or an explicit JMS/AMQP/MQTT requirement appears."]
+  },
+  outposts: {
+    tips_ko: ["데이터 상주 규정, 로컬 장비와의 서브밀리초 지연, 완전히 인터넷과 단절된 운영처럼 진짜 온프레미스 요구가 있어야 정답.", "그냥 \"하이브리드\"라는 표현만 있으면 Direct Connect나 Storage Gateway가 더 적합한 경우가 많음 -- Outposts를 오답 함정으로 배치하기 좋은 지점."],
+    tips_en: ["The answer only for genuine on-premises needs: data-residency rules, sub-millisecond links to local equipment, or fully disconnected operation.", "Plain \"hybrid\" language alone often fits Direct Connect or Storage Gateway better -- a good spot to plant Outposts as the distractor."]
+  },
+  neptune: {
+    tips_ko: ["\"친구의 친구\", \"추천 엔진\", \"관계 탐색\", \"지식 그래프\" 같은 신호 문구가 있어야 정답 후보 -- 관계 자체를 조회하는 게 핵심.", "단순 조인이 많은 관계형 데이터나 단순 키-값 조회는 Neptune 대상이 아님 -- RDS나 DynamoDB가 낫다는 게 오답 판별 기준."],
+    tips_en: ["Signal phrases: \"friends of friends\", \"recommendation engine\", \"relationship traversal\", \"knowledge graph\" -- the point is querying relationships themselves.", "Relational data with plain joins, or simple key-value lookups, is not a Neptune fit -- RDS or DynamoDB serves those better."]
+  },
+  decouple: {
+    tips_ko: ["\"한 컴포넌트 장애가 전체로 번짐\", \"트래픽 급증이 백엔드를 압도\" 같은 표현은 컴포넌트 사이에 SQS 큐를 넣는 게 정답 패턴.", "여러 시스템이 같은 이벤트를 각자 처리해야 하면 SNS 팬아웃(SNS 토픽에 여러 SQS 큐를 구독)이 정답."],
+    tips_en: ["\"A failure in one component cascades\" or \"traffic spikes overwhelm the backend\" -> the answer pattern is inserting an SQS queue between components.", "When several systems must each independently process the same event, SNS fan-out (multiple SQS queues subscribed to one SNS topic) is the answer."]
+  },
+  fargate: {
+    tips_ko: ["Lambda와의 선택: 둘 다 서버리스지만 Lambda는 이벤트 기반·15분 제한, Fargate는 장시간 실행 서비스에 적합 -- \"기존 컨테이너 이미지 그대로\"나 \"15분 넘게 실행\"이면 Fargate.", "vCPU·메모리 단위로 과금돼 상시 고사용률 워크로드에선 Spot·RI를 쓴 EC2 시작 유형보다 비쌀 수 있음 -- \"최저 비용\"이면 EC2 시작 유형이 정답일 수 있음."],
+    tips_en: ["Choosing vs Lambda: both are serverless, but Lambda is event-driven and capped at 15 minutes while Fargate suits long-running services -- \"existing container image\" or \"runs over 15 minutes\" -> Fargate.", "Bills per vCPU/GB, so for steady high-utilization workloads it can cost more than the EC2 launch type with Spot or RIs -- \"cheapest\" may point to EC2 launch type instead."]
+  },
+  ami: {
+    tips_ko: ["\"확장이 느리다\"는 매번 유저 데이터로 소프트웨어를 설치하는 대신, 미리 설치된 골든 AMI로 부팅 시간을 줄이는 게 정답.", "AMI는 리전에 종속 -- 다른 리전에서 쓰려면 복사가 필요, 재해 복구·다중 리전 문제엔 \"대상 리전으로 AMI 복사\"가 필수 단계로 포함됨.", "암호화된 스냅샷 기반 AMI로 시작한 인스턴스는 볼륨도 암호화 상태 유지 -- 규정 준수 문제에선 AMI 단계의 암호화 여부를 확인해야 함."],
+    tips_en: ["\"Scaling is too slow\" is fixed by a custom golden AMI with software pre-installed, not a user-data script that installs it at every launch.", "AMIs are Region-scoped and must be copied to be used elsewhere -- DR and multi-Region questions include \"copy the AMI to the target Region\" as a required step.", "Instances launched from an AMI built on encrypted snapshots keep encrypted volumes -- for compliance requirements, check encryption at the AMI level."]
+  },
+  reserved: {
+    tips_ko: ["표준 RI는 할인율은 높지만 인스턴스 패밀리에 고정, 전환형 RI는 유연하지만 할인율이 낮음, Compute Savings Plans는 패밀리·리전과 무관하게 EC2·Fargate·Lambda 전체에 적용돼 가장 유연.", "선결제 방식: 전체 선결제가 가장 저렴, 이어서 일부 선결제, 무선결제 순 -- \"선결제 없이 절약\"이면 무선결제 Savings Plans.", "RI·Savings Plans 혜택은 조직 내 계정 간에 공유됨 -- 다중 계정 비용 문제에서 통합 청구와 함께 출제."],
+    tips_en: ["Standard RIs discount most but lock to an instance family; Convertible RIs are flexible with less discount; Compute Savings Plans apply across EC2, Fargate, and Lambda regardless of family or Region -- the most flexible.", "Payment options: All Upfront is cheapest, then Partial Upfront, then No Upfront -- \"save without paying upfront\" -> No Upfront Savings Plans.", "RI and Savings Plans benefits are shared across accounts in an organization -- pairs with consolidated billing in multi-account cost questions."]
+  },
+  dms: {
+    tips_ko: ["동종 이전(Oracle→Oracle)은 DMS만으로 충분, 이종 이전(Oracle→Aurora PostgreSQL)은 SCT로 스키마부터 변환한 뒤 DMS로 데이터를 옮김.", "변경 데이터 캡처(CDC)로 원본을 계속 추적 복제해 다운타임을 몇 분 단위로 줄임 -- \"최소 다운타임 마이그레이션\" 문제의 핵심."],
+    tips_en: ["Homogeneous moves (Oracle -> Oracle) need only DMS; heterogeneous moves (Oracle -> Aurora PostgreSQL) convert the schema with SCT first, then move data with DMS.", "Change data capture (CDC) keeps following the source, shrinking downtime to minutes -- the core of \"minimal-downtime migration\" questions."]
+  },
+  directconnect: {
+    tips_ko: ["\"일주일 안에 연결\" 같은 촉박한 기한이 나오면 Direct Connect는 오답, 물리 회선 설치가 필요 없는 VPN이 정답.", "단일 회선은 단일 장애점 -- 고가용성엔 다른 위치의 두 번째 회선이나 VPN 백업 추가.", "가상 인터페이스 종류: 프라이빗 VIF는 VPC 프라이빗 IP, 퍼블릭 VIF는 S3 같은 퍼블릭 엔드포인트, 트랜짓 VIF는 Transit Gateway에 연결."],
+    tips_en: ["If the requirement says \"connect within a week\", Direct Connect is wrong and VPN is right -- a physical circuit must be installed.", "A single connection is a single point of failure -- add a second at a different location or a VPN backup for high availability.", "Virtual interface types: a private VIF reaches VPC private IPs, a public VIF reaches public endpoints such as S3, a transit VIF attaches to a Transit Gateway."]
+  },
+  eks: {
+    tips_ko: ["\"Kubernetes\", \"kubectl\", \"Helm\", \"기존 매니페스트\" 같은 단어가 있으면 EKS. 그냥 \"컨테이너\"만 있으면 운영 부담이 낮은 ECS/Fargate가 보통 정답.", "EKS도 Fargate 프로파일로 노드 그룹 관리 없이 파드를 실행 가능 -- \"Kubernetes는 유지하되 노드 관리는 그만두고 싶다\"의 정답."],
+    tips_en: ["Words like \"Kubernetes\", \"kubectl\", \"Helm\", or \"existing manifests\" mean EKS. Plain \"containers\" alone usually favors ECS/Fargate for lower operational overhead.", "EKS can run pods on Fargate profiles, removing node-group management -- the answer to \"keep Kubernetes but stop managing nodes\"."]
+  },
+  snowball: {
+    tips_ko: ["용량으로 선택: Snowcone은 엣지의 수 TB, Snowball Edge는 수십 TB의 표준 선택, Snowmobile은 엑사바이트급 데이터센터 이전용.", "\"대역폭 제한\", \"네트워크를 최소로\", \"전송에 몇 주씩 걸림\" 같은 표현이 결정적 단서 -- 그렇지 않으면 DataSync가 더 빠르고 간단."],
+    tips_en: ["Choose by capacity: Snowcone handles a few TB at the edge, Snowball Edge is the standard choice for tens of TB, Snowmobile moves exabyte-class data centers.", "\"Limited bandwidth\", \"use the least network\", or \"would take weeks\" are the decisive clues -- otherwise DataSync is faster and simpler."]
+  },
+  waf: {
+    tips_ko: ["Shield와의 역할 분담: Shield는 L3/L4 DDoS, WAF는 L7(SQL 인젝션·XSS·봇) 공격 -- 대규모 L7 폭주엔 둘을 함께 사용.", "속도 기반 규칙으로 5분 내 요청 수가 임계값을 넘는 IP를 자동 차단 -- 무차별 로그인 시도나 스크래핑 문제의 정답."],
+    tips_en: ["Division of labor with Shield: Shield handles L3/L4 DDoS, WAF handles L7 attacks (SQL injection, XSS, bots) -- large layer-7 floods use both together.", "Rate-based rules automatically block an IP exceeding a request count in five minutes -- the answer for brute-force logins and scraping."]
+  },
+  backup: {
+    tips_ko: ["여러 서비스에 대해 정책 준수 여부를 감사하고, Vault Lock으로 보존 기간 내 삭제를 차단 -- 규정 준수 보고가 필요할 때 정답.", "서비스별로 스냅샷 스크립트를 Lambda로 직접 짜는 것보다 운영 부담이 낮아 그 대안으로 출제됨."],
+    tips_en: ["Audits policy compliance across many services, and Vault Lock blocks deletion within the retention period -- the answer when compliance reporting is required.", "Beats writing per-service snapshot scripts in Lambda on operational overhead, making it the correct choice over a hand-rolled alternative."]
+  },
+  globalaccel: {
+    tips_ko: ["CloudFront와 구분: 캐시 가능한 HTTP 콘텐츠는 CloudFront, TCP/UDP 게임·IoT·음성 트래픽이나 고정 IP가 필요하면 Global Accelerator.", "DNS TTL을 기다리지 않고 몇 초 안에 정상 리전으로 트래픽을 전환 -- Route 53 장애 조치보다 빠른 리전 간 페일오버가 필요할 때 정답."],
+    tips_en: ["Vs CloudFront: cacheable HTTP content -> CloudFront. TCP/UDP gaming, IoT, or voice traffic, or a need for static IPs -> Global Accelerator.", "Shifts traffic to a healthy Region within seconds without waiting for DNS TTLs -- faster than Route 53 failover."]
+  },
+  emr: {
+    tips_ko: ["코어 노드는 On-Demand, 태스크 노드는 Spot으로 구성하면 데이터 유실 위험 없이 비용을 낮출 수 있음 -- EMR 비용 문제의 정답.", "작업이 끝나면 클러스터를 종료하고 데이터는 EMRFS로 S3에 보관하는 임시(transient) 클러스터 구성이 유휴 비용을 없앰."],
+    tips_en: ["Run core nodes On-Demand and task nodes on Spot to cut cost without risking data loss -- the answer for EMR cost questions.", "Terminate the cluster when the job finishes and keep data in S3 via EMRFS -- a transient-cluster pattern that eliminates idle cost."]
+  },
+  config: {
+    tips_ko: ["\"규정 미준수 리소스를 찾아라\", \"이 설정이 언제 바뀌었나\"는 Config의 몫 -- API 호출 이력은 CloudTrail, 취약점은 Inspector와 구분.", "규칙에 SSM Automation 문서를 연결하면 위반 감지 시 자동으로 되돌리는 자동 교정까지 가능."],
+    tips_en: ["\"Find non-compliant resources\" and \"when did this setting change\" are Config's job -- API call history is CloudTrail, vulnerabilities are Inspector.", "Attaching an SSM Automation document to a rule auto-remediates violations the moment they're detected."]
+  },
+  s3version: {
+    tips_ko: ["버전 관리 버킷에서 삭제는 삭제 마커만 추가하는 것 -- 마커를 지우면 객체가 복원됨. \"실수로 지운 파일 복구\" 문제의 정답.", "MFA 삭제는 버전 영구 삭제나 버전 관리 중지에 MFA를 요구, 루트 사용자만 활성화 가능 -- 악의적 삭제 시나리오에 등장.", "Object Lock 거버넌스 모드는 특별 권한으로 우회 가능, 컴플라이언스 모드는 보존 기간 내 루트 계정도 삭제 불가 -- 엄격한 규제면 컴플라이언스 모드.", "CRR·SRR 복제는 원본·대상 버킷 모두 버전 관리가 켜져 있어야 함 -- 선택지에서 자주 빠뜨리는 전제 조건."],
+    tips_en: ["Deleting in a versioned bucket only adds a delete marker; removing the marker restores the object -- the answer to \"recover accidentally deleted files\".", "MFA Delete requires MFA to permanently delete versions or suspend versioning, and only the root user can enable it -- appears in malicious-deletion scenarios.", "Object Lock Governance mode can be overridden with a special permission; Compliance mode blocks deletion even by root until the retention period expires -- strict regulations need Compliance mode.", "CRR and SRR require versioning on both source and destination buckets -- a step frequently missing from replication answer choices."]
+  },
+  cloudformation: {
+    tips_ko: ["StackSets는 하나의 템플릿을 여러 계정·리전에 한 번에 배포 -- 조직 전체에 표준 베이스라인을 배포하는 문제의 정답.", "드리프트 감지로 콘솔에서 수동으로 바뀐 리소스를 찾아내 템플릿과 실제 상태의 차이를 감사."],
+    tips_en: ["StackSets deploys one template to many accounts and Regions at once -- the answer for rolling a standard baseline across an organization.", "Drift detection finds resources changed manually in the console, auditing the gap between template and reality."]
+  },
+  vpcpeering: {
+    tips_ko: ["전이적 라우팅 불가 -- A-B, B-C가 피어링돼도 A는 C에 도달 못 함. VPC 수가 늘면 메시 구조가 기하급수적으로 복잡해져 Transit Gateway가 정답이 됨.", "CIDR이 겹치면 피어링 자체가 불가능 -- 주소 공간을 사전에 설계해야 하는 이유."],
+    tips_en: ["Not transitive -- if A peers with B and B with C, A still cannot reach C. As VPC count grows the mesh explodes quadratically, making Transit Gateway the answer.", "Overlapping CIDR blocks make peering impossible -- the reason to plan address space up front."]
+  },
+  acm: {
+    tips_ko: ["ACM 인증서는 ALB·CloudFront·API Gateway에만 붙일 수 있음 -- EC2에 직접 설치는 불가하므로 그 경우 자체 인증서나 ACM Private CA가 필요.", "CloudFront용 인증서는 반드시 us-east-1 리전에서 발급해야 함 -- 자주 나오는 함정 디테일."],
+    tips_en: ["ACM certificates attach to ALB, CloudFront, and API Gateway only -- they cannot be installed directly on EC2, so terminating there needs your own certificate or ACM Private CA.", "A certificate for CloudFront must be issued in us-east-1 -- a frequently tested detail."]
+  },
+  macie: {
+    tips_ko: ["S3만 대상 -- RDS나 EBS의 민감정보를 묻는 문제라면 Macie는 오답."],
+    tips_en: ["Covers only S3 -- wrong when the question asks about sensitive data in RDS or EBS."]
+  },
+  transitgw: {
+    tips_ko: ["피어링 메시를 대체 -- 수십 개 VPC를 서로 연결해야 하면 피어링은 관리 불가 수준이 되고, 하나의 Transit Gateway에 전부 연결해 라우팅을 중앙화하는 게 정답.", "라우팅 테이블을 분리하면 어떤 VPC끼리 통신 가능한지 격리 가능 -- 개발/운영 환경 분리에 활용."],
+    tips_en: ["Replaces the peering mesh -- when dozens of VPCs must interconnect, peering becomes unmanageable; attaching them all to one Transit Gateway centralizes routing.", "Separate route tables isolate which VPCs may talk to each other -- used to separate development from production."]
+  },
 };
 
 /**
