@@ -2224,11 +2224,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // The exam-in-progress/result screens live outside the tab-view system
     // (see startExam()) so a session started from a tab other than "exam"
     // (e.g. local dump practice) stays visible without navigating away from
-    // it. Only keep them on screen if this is still the tab the active
-    // session was launched from -- otherwise hide them and let the target
-    // tab show its own normal content.
+    // it. Restore whichever of the two matches the session's state if we're
+    // back on the tab that launched it; otherwise hide both and let the
+    // target tab show its own normal content.
     const keepExamOverlay = state.examSession.active && state.examSession.homeTab === tabId;
-    if (!keepExamOverlay) {
+    if (keepExamOverlay) {
+      el.examInProgressScreen.style.display = state.examSession.isSubmitted ? 'none' : 'block';
+      el.examResultScreen.style.display = state.examSession.isSubmitted ? 'block' : 'none';
+    } else {
       el.examInProgressScreen.style.display = 'none';
       el.examResultScreen.style.display = 'none';
     }
