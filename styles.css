@@ -1323,6 +1323,21 @@ summary:focus-visible, a:focus-visible, .mm-node:focus-visible {
   margin-bottom: 0.5rem;
 }
 
+.cq-autocomplete-hint {
+  font-size: 0.8rem;
+  color: var(--accent);
+  background: var(--accent-tint);
+  border-radius: var(--r-md);
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.btn-check-answer {
+  align-self: flex-start;
+  margin-top: 0.75rem;
+}
+.btn-check-answer:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .explanation-box {
   margin-top: 1.5rem;
   background: var(--surface-3);
@@ -1435,6 +1450,13 @@ summary:focus-visible, a:focus-visible, .mm-node:focus-visible {
 .omr-node.answered { background: var(--green-tint); color: var(--green); }
 .omr-node.flagged { background: rgba(178, 80, 0, 0.09); color: var(--amber); }
 .omr-node.current { background: var(--accent); color: #fff; font-weight: 500; }
+/* Concept-practice number strip: unlike the exam OMR sheet (graded only at
+   submission, so "answered" just means filled-in), this quiz reveals each
+   question immediately, so its numbers show correct/wrong once graded and a
+   neutral in-progress mark for a still-unsubmitted multi-answer pick. */
+.omr-node.in-progress { background: var(--accent-tint); color: var(--accent); }
+.omr-node.is-correct { background: var(--green-tint); color: var(--green); }
+.omr-node.is-wrong { background: var(--red-tint); color: var(--red); }
 
 .exam-result-card {
   max-width: 640px;

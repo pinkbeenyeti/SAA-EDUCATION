@@ -1619,12 +1619,16 @@ document.addEventListener('DOMContentLoaded', () => {
     refs.lblScenario.textContent = isKo ? q.question_ko : q.question_en;
 
     refs.numStrip.innerHTML = '';
-    questions.forEach((_, i) => {
+    questions.forEach((qq, i) => {
       const node = document.createElement('div');
       node.className = 'omr-node';
       node.textContent = i + 1;
       if (i === idx) node.classList.add('current');
-      if (practice.userAnswers[i] !== undefined) node.classList.add('answered');
+      if (practice.revealed[i]) {
+        node.classList.add(gradeAnswer(qq, practice.userAnswers[i]) ? 'is-correct' : 'is-wrong');
+      } else if (practice.userAnswers[i] !== undefined) {
+        node.classList.add('in-progress');
+      }
       node.addEventListener('click', () => {
         practice.index = i;
         rerender();
@@ -1672,6 +1676,7 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
       optItem.addEventListener('click', () => {
         if (isMulti) {
+          if (isRevealed) return; // locked once graded -- use Check Answer to grade, no re-picking after
           const current = Array.isArray(practice.userAnswers[idx]) ? practice.userAnswers[idx].slice() : [];
           const pos = current.indexOf(optIdx);
           if (pos >= 0) {
@@ -1684,12 +1689,27 @@ document.addEventListener('DOMContentLoaded', () => {
           practice.userAnswers[idx] = current;
         } else {
           practice.userAnswers[idx] = optIdx;
+          practice.revealed[idx] = true;
         }
-        practice.revealed[idx] = true;
         rerender();
       });
       refs.optionsContainer.appendChild(optItem);
     });
+
+    // Multi-answer questions grade only on explicit submission -- selecting
+    // just the first of N correct options must not immediately flash "wrong".
+    if (isMulti && !isRevealed) {
+      const checkBtn = document.createElement('button');
+      checkBtn.type = 'button';
+      checkBtn.className = 'btn-primary btn-check-answer';
+      checkBtn.textContent = isKo ? '정답 확인' : 'Check Answer';
+      checkBtn.disabled = selectedList.length !== q.answer.length;
+      checkBtn.addEventListener('click', () => {
+        practice.revealed[idx] = true;
+        rerender();
+      });
+      refs.optionsContainer.appendChild(checkBtn);
+    }
 
     if (isRevealed) {
       refs.explanationBox.style.display = 'block';
@@ -1712,7 +1732,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const meta = state.selectedConceptMeta;
     const questions = state.selectedConceptQuestions || [];
     if (!meta || questions.length === 0 || state.roadmapProgress.has(meta.id)) return;
-    const allAnswered = questions.every((_, i) => state.cqPractice.userAnswers[i] !== undefined);
+    const allAnswered = questions.every((_, i) => state.cqPractice.revealed[i]);
     if (!allAnswered) return;
     const correct = questions.filter((q, i) => gradeAnswer(q, state.cqPractice.userAnswers[i])).length;
     if (correct / questions.length >= CONCEPT_AUTO_COMPLETE_THRESHOLD) {
