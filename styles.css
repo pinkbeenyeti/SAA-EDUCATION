@@ -1116,6 +1116,10 @@ summary:focus-visible, a:focus-visible, .mm-node:focus-visible {
   border-top: 1px solid var(--hair);
   background: var(--surface-2);
 }
+/* Concept Question Modal footer carries a reset action on the left and
+   close/complete on the right, so it needs the two ends pushed apart. */
+#modalConceptQuestions .inspector-footer { justify-content: space-between; }
+.cq-footer-actions { display: flex; gap: 0.6rem; }
 
 /* ==========================================================================
    Concept Question Modal — tips/practice tabs and in-modal quiz

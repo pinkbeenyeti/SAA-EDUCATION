@@ -377,10 +377,6 @@
             </div>
           </div>
           <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <!-- Only shown when this modal was opened from the Study Roadmap tab -->
-            <button class="btn-secondary" id="btnCqNextConcept" style="display: none;">
-              <span data-ko="다음 개념" data-en="Next Concept">다음 개념</span> <span>→</span>
-            </button>
             <button class="lang-toggle-btn" id="btnCqModalLangToggle">
               🌐 <span id="cqModalLangDisplay">KO / EN</span>
             </button>
@@ -465,7 +461,11 @@
         </div>
 
         <div class="inspector-footer">
-          <button class="btn-secondary" id="btnCloseConceptQuestionsFooter" data-ko="닫기" data-en="Close">닫기</button>
+          <button class="btn-secondary" id="btnCqResetProgress" data-ko="문제 풀이 기록 초기화" data-en="Reset Practice Progress">문제 풀이 기록 초기화</button>
+          <div class="cq-footer-actions">
+            <button class="btn-secondary" id="btnCloseConceptQuestionsFooter" data-ko="닫기" data-en="Close">닫기</button>
+            <button class="btn-primary" id="btnCqMarkComplete" data-ko="학습 완료" data-en="Mark Complete">학습 완료</button>
+          </div>
         </div>
       </div>
     </div>

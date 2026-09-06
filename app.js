@@ -61,7 +61,8 @@ document.addEventListener('DOMContentLoaded', () => {
     roadmapProgressFill: document.getElementById('roadmapProgressFill'),
     roadmapProgressLabel: document.getElementById('roadmapProgressLabel'),
     roadmapNextBanner: document.getElementById('roadmapNextBanner'),
-    btnCqNextConcept: document.getElementById('btnCqNextConcept'),
+    btnCqMarkComplete: document.getElementById('btnCqMarkComplete'),
+    btnCqResetProgress: document.getElementById('btnCqResetProgress'),
 
     // Mindmap (concept tree) View
     mmSvg: document.getElementById('mmSvg'),
@@ -1352,12 +1353,26 @@ document.addEventListener('DOMContentLoaded', () => {
     return null;
   }
 
-  function openConceptModalById(conceptId, viaRoadmap) {
-    const meta = mm.concepts[conceptId];
-    if (!meta) return;
-    const curated = findCuratedService(conceptId);
-    const questions = getAllQuestions().filter(q => (q.conceptIds || []).includes(conceptId));
-    openConceptQuestionModal(meta, curated, questions, viaRoadmap);
+  // Roadmap concept clicks land here instead of jumping straight into the
+  // question modal -- switches to the mindmap tab, expands/reveals whatever
+  // is needed to show the node (category tail-collapse, domain filter), and
+  // centers the view on it so the learner reads the concept panel first.
+  function goToConceptInMindmap(conceptId) {
+    const cat = mm.concepts[conceptId] && mm.concepts[conceptId].cat;
+    if (cat) state.activeDomain = cat;
+    switchTab('mindmap');
+    const nodeId = 'con:' + conceptId;
+    const node = mm.byId[nodeId];
+    if (node && node.cat) mm.revealed[node.cat] = true;
+    mmExpandTo(nodeId);
+    mmSelect(nodeId);
+    const target = mm.byId[nodeId];
+    if (target) {
+      const rect = el.mmCanvasWrapper.getBoundingClientRect();
+      mm.view.x = rect.width / 2 - (target.x + target.w / 2) * mm.view.k;
+      mm.view.y = rect.height / 2 - target.y * mm.view.k;
+      mmApplyView();
+    }
   }
 
   function renderRoadmap() {
@@ -1387,7 +1402,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <span class="roadmap-next-arrow">→</span>
       `;
-      el.roadmapNextBanner.onclick = () => openConceptModalById(nextId, true);
+      el.roadmapNextBanner.onclick = () => goToConceptInMindmap(nextId);
     } else {
       el.roadmapNextBanner.style.display = '';
       el.roadmapNextBanner.onclick = null;
@@ -1483,7 +1498,7 @@ document.addEventListener('DOMContentLoaded', () => {
         row.appendChild(checkbox);
         row.appendChild(label);
         row.appendChild(count);
-        row.addEventListener('click', () => openConceptModalById(conceptId, true));
+        row.addEventListener('click', () => goToConceptInMindmap(conceptId));
         rows.appendChild(row);
       });
       phaseEl.appendChild(rows);
@@ -1497,14 +1512,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // AWS_DOMAINS service. Exam tips are shown as a bonus when a service match
   // exists; the question list and quiz actions work for every concept.
   // ==========================================================================
-  function openConceptQuestionModal(meta, curated, questions, viaRoadmap) {
+  function openConceptQuestionModal(meta, curated, questions) {
     state.selectedConceptMeta = meta;
     state.selectedCuratedService = curated;
     state.selectedConceptQuestions = questions;
     state.selectedLocalDumpQuestions = (typeof LOCAL_DUMP_BANK !== 'undefined')
       ? LOCAL_DUMP_BANK.filter(q => (q.conceptIds || []).includes(meta.id))
       : [];
-    state.cqViaRoadmap = !!viaRoadmap;
     // Default straight to Practice when this concept has no curated tips --
     // the Tips tab would otherwise open on an empty state every time.
     const isKo = state.currentLang === 'ko';
@@ -1565,10 +1579,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const hasLocalDumpBank = typeof LOCAL_DUMP_BANK !== 'undefined';
     el.btnCqTabLocalDump.style.display = hasLocalDumpBank ? '' : 'none';
     el.btnCqTabLocalDump.disabled = localDumpQuestions.length === 0;
-
-    // "다음 개념" only makes sense when the learner arrived from the Study
-    // Roadmap tab -- elsewhere (mindmap browsing) there's no defined "next".
-    el.btnCqNextConcept.style.display = state.cqViaRoadmap ? '' : 'none';
 
     if (tips) {
       tips.forEach(tip => {
@@ -1692,6 +1702,26 @@ document.addEventListener('DOMContentLoaded', () => {
     refs.nextBtn.disabled = idx === questions.length - 1;
   }
 
+  // A concept counts as learned on its own once every question tagged to it
+  // has been attempted and at least 60% were correct -- on top of the manual
+  // "학습 완료" button, so a learner who never touches that button still gets
+  // credited for actually having practiced the concept.
+  const CONCEPT_AUTO_COMPLETE_THRESHOLD = 0.6;
+
+  function checkConceptAutoComplete() {
+    const meta = state.selectedConceptMeta;
+    const questions = state.selectedConceptQuestions || [];
+    if (!meta || questions.length === 0 || state.roadmapProgress.has(meta.id)) return;
+    const allAnswered = questions.every((_, i) => state.cqPractice.userAnswers[i] !== undefined);
+    if (!allAnswered) return;
+    const correct = questions.filter((q, i) => gradeAnswer(q, state.cqPractice.userAnswers[i])).length;
+    if (correct / questions.length >= CONCEPT_AUTO_COMPLETE_THRESHOLD) {
+      state.roadmapProgress.add(meta.id);
+      saveRoadmapProgress();
+      if (state.currentTab === 'roadmap') renderRoadmap();
+    }
+  }
+
   function renderCqPracticePanel() {
     renderQuestionPracticePanel(
       state.selectedConceptQuestions || [], state.cqPractice,
@@ -1703,6 +1733,7 @@ document.addEventListener('DOMContentLoaded', () => {
       state.currentLang === 'ko' ? '이 개념에 연결된 문제가 아직 없습니다.' : 'No questions linked to this concept yet.',
       renderCqPracticePanel
     );
+    checkConceptAutoComplete();
   }
 
   function renderCqLocalDumpPracticePanel() {
@@ -2301,19 +2332,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // Concept Question Modal Controls
     el.btnCloseConceptQuestions.addEventListener('click', closeConceptQuestionModal);
     el.btnCloseConceptQuestionsFooter.addEventListener('click', closeConceptQuestionModal);
-    el.btnCqNextConcept.addEventListener('click', () => {
+    el.btnCqMarkComplete.addEventListener('click', () => {
       const currentId = state.selectedConceptMeta && state.selectedConceptMeta.id;
       if (currentId) {
         state.roadmapProgress.add(currentId);
         saveRoadmapProgress();
+        if (state.currentTab === 'roadmap') renderRoadmap();
       }
-      if (state.currentTab === 'roadmap') renderRoadmap();
-      const nextId = getNextIncompleteConceptId(currentId);
-      if (nextId) {
-        openConceptModalById(nextId, true);
-      } else {
-        closeConceptQuestionModal();
-      }
+      closeConceptQuestionModal();
+    });
+    el.btnCqResetProgress.addEventListener('click', () => {
+      const isKo = state.currentLang === 'ko';
+      if (!confirm(isKo ? '이 개념의 문제 풀이 기록을 초기화하시겠습니까?' : 'Reset practice progress for this concept?')) return;
+      state.cqPractice = { index: 0, userAnswers: {}, revealed: {} };
+      renderCqPracticePanel();
     });
     el.modalConceptQuestions.addEventListener('click', (e) => {
       if (e.target === el.modalConceptQuestions) closeConceptQuestionModal();
