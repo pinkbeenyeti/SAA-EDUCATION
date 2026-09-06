@@ -15,8 +15,10 @@ document.addEventListener('DOMContentLoaded', () => {
     selectedConceptMeta: null,
     selectedCuratedService: null,
     selectedConceptQuestions: [],
+    selectedLocalDumpQuestions: [],
     cqTab: 'tips',
     cqPractice: { index: 0, userAnswers: {}, revealed: {} },
+    cqLocalDumpPractice: { index: 0, userAnswers: {}, revealed: {} },
     examSession: {
       active: false,
       mode: 'fixed', // 'fixed' | 'infinite'
@@ -32,7 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
       timerInterval: null,
       isSubmitted: false
     },
-    incorrectNotes: []
+    incorrectNotes: [],
+    roadmapProgress: new Set(JSON.parse(localStorage.getItem('aws_saa_roadmap_progress') || '[]'))
   };
 
   // ==========================================================================
@@ -52,6 +55,13 @@ document.addEventListener('DOMContentLoaded', () => {
     selectLocalDumpCount: document.getElementById('selectLocalDumpCount'),
     btnStartLocalDumpExam: document.getElementById('btnStartLocalDumpExam'),
     txtLocalDumpCount: document.getElementById('txtLocalDumpCount'),
+
+    // Study Roadmap View
+    roadmapPhaseList: document.getElementById('roadmapPhaseList'),
+    roadmapProgressFill: document.getElementById('roadmapProgressFill'),
+    roadmapProgressLabel: document.getElementById('roadmapProgressLabel'),
+    roadmapNextBanner: document.getElementById('roadmapNextBanner'),
+    btnCqNextConcept: document.getElementById('btnCqNextConcept'),
 
     // Mindmap (concept tree) View
     mmSvg: document.getElementById('mmSvg'),
@@ -91,6 +101,18 @@ document.addEventListener('DOMContentLoaded', () => {
     cqOptionsContainer: document.getElementById('cqOptionsContainer'),
     cqExplanationBox: document.getElementById('cqExplanationBox'),
     cqLblExplanationText: document.getElementById('cqLblExplanationText'),
+
+    // Concept Question Modal -- Local Exam Dump tab (local-only, see init)
+    btnCqTabLocalDump: document.getElementById('btnCqTabLocalDump'),
+    cqLocalDumpPanel: document.getElementById('cqLocalDumpPanel'),
+    cqLocalDumpNumStrip: document.getElementById('cqLocalDumpNumStrip'),
+    btnCqPrevLocalDumpQuestion: document.getElementById('btnCqPrevLocalDumpQuestion'),
+    btnCqNextLocalDumpQuestion: document.getElementById('btnCqNextLocalDumpQuestion'),
+    cqLblLocalDumpQuestionNumber: document.getElementById('cqLblLocalDumpQuestionNumber'),
+    cqLblLocalDumpQuestionScenario: document.getElementById('cqLblLocalDumpQuestionScenario'),
+    cqLocalDumpOptionsContainer: document.getElementById('cqLocalDumpOptionsContainer'),
+    cqLocalDumpExplanationBox: document.getElementById('cqLocalDumpExplanationBox'),
+    cqLblLocalDumpExplanationText: document.getElementById('cqLblLocalDumpExplanationText'),
 
     // Exam View
     examSetupScreen: document.getElementById('examSetupScreen'),
@@ -1302,21 +1324,194 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================================================
+  // Study Roadmap -- STUDY_ROADMAP (roadmap.js) groups all 95 concepts into 8
+  // ordered phases, answering "what do I study first" now that most questions
+  // combine 2-3 concepts and the mindmap alone doesn't imply an order.
+  // Progress (which concepts are checked off) persists to localStorage the
+  // same way incorrectNotes does.
+  // ==========================================================================
+  function saveRoadmapProgress() {
+    localStorage.setItem('aws_saa_roadmap_progress', JSON.stringify([...state.roadmapProgress]));
+  }
+
+  // Flat concept order across all 8 phases -- the sequence "다음 개념"/the
+  // continue banner walk through.
+  function getRoadmapConceptOrder() {
+    if (typeof STUDY_ROADMAP === 'undefined') return [];
+    return STUDY_ROADMAP.flatMap(phase => phase.conceptIds);
+  }
+
+  // First not-yet-checked-off concept strictly after `afterId` in roadmap
+  // order (or the very first gap overall when afterId is omitted).
+  function getNextIncompleteConceptId(afterId) {
+    const order = getRoadmapConceptOrder();
+    const startIdx = afterId ? order.indexOf(afterId) + 1 : 0;
+    for (let i = startIdx; i < order.length; i++) {
+      if (!state.roadmapProgress.has(order[i])) return order[i];
+    }
+    return null;
+  }
+
+  function openConceptModalById(conceptId, viaRoadmap) {
+    const meta = mm.concepts[conceptId];
+    if (!meta) return;
+    const curated = findCuratedService(conceptId);
+    const questions = getAllQuestions().filter(q => (q.conceptIds || []).includes(conceptId));
+    openConceptQuestionModal(meta, curated, questions, viaRoadmap);
+  }
+
+  function renderRoadmap() {
+    if (typeof STUDY_ROADMAP === 'undefined' || !el.roadmapPhaseList) return;
+    const isKo = state.currentLang === 'ko';
+    const allQuestions = getAllQuestions();
+    const totalConcepts = STUDY_ROADMAP.reduce((sum, phase) => sum + phase.conceptIds.length, 0);
+    const doneCount = STUDY_ROADMAP.reduce((sum, phase) =>
+      sum + phase.conceptIds.filter(id => state.roadmapProgress.has(id)).length, 0);
+
+    el.roadmapProgressFill.style.width = `${totalConcepts ? (doneCount / totalConcepts) * 100 : 0}%`;
+    el.roadmapProgressLabel.textContent = `${doneCount} / ${totalConcepts}`;
+
+    // "이어서 학습하기" banner -- always points at the earliest unchecked
+    // concept, so there's always one obvious next step instead of a wall of
+    // 8 equally-weighted phase cards.
+    const nextId = getNextIncompleteConceptId(null);
+    const nextPhase = nextId ? STUDY_ROADMAP.find(p => p.conceptIds.includes(nextId)) : null;
+    if (nextId && nextPhase && mm.concepts[nextId]) {
+      const nextMeta = mm.concepts[nextId];
+      el.roadmapNextBanner.style.display = '';
+      el.roadmapNextBanner.innerHTML = `
+        <div class="roadmap-next-info">
+          <span class="roadmap-next-label" data-ko="이어서 학습하기" data-en="Continue Studying">이어서 학습하기</span>
+          <strong class="roadmap-next-concept">${isKo ? nextMeta.label_ko : nextMeta.label}</strong>
+          <span class="roadmap-next-phase">${isKo ? nextPhase.title_ko : nextPhase.title_en}</span>
+        </div>
+        <span class="roadmap-next-arrow">→</span>
+      `;
+      el.roadmapNextBanner.onclick = () => openConceptModalById(nextId, true);
+    } else {
+      el.roadmapNextBanner.style.display = '';
+      el.roadmapNextBanner.onclick = null;
+      el.roadmapNextBanner.innerHTML = `
+        <div class="roadmap-next-info">
+          <span class="roadmap-next-label" data-ko="완료" data-en="Complete">완료</span>
+          <strong class="roadmap-next-concept" data-ko="95개 개념을 모두 학습했습니다!" data-en="You've been through all 95 concepts!">95개 개념을 모두 학습했습니다!</strong>
+        </div>
+      `;
+    }
+
+    // Precompute concept -> matching question ids once so phase-level
+    // "total questions" can dedupe combo questions instead of double-counting.
+    const questionIdsByConceptId = {};
+    allQuestions.forEach(q => {
+      (q.conceptIds || []).forEach(cid => {
+        if (!questionIdsByConceptId[cid]) questionIdsByConceptId[cid] = [];
+        questionIdsByConceptId[cid].push(q.id);
+      });
+    });
+
+    el.roadmapPhaseList.innerHTML = '';
+    STUDY_ROADMAP.forEach(phase => {
+      const phaseDone = phase.conceptIds.filter(id => state.roadmapProgress.has(id)).length;
+      const isCurrentFocus = !!(nextPhase && phase.id === nextPhase.id);
+      // Softly dim phases the learner hasn't reached yet (no progress at all
+      // and later than the current-focus phase) -- not a hard lock, just a
+      // visual cue for "you're here" instead of 8 identical-weight cards.
+      // Skip this on a totally fresh roadmap (doneCount === 0), or the very
+      // first render would dim 7 of 8 cards and look broken rather than guided.
+      const isUpcoming = doneCount > 0 && !isCurrentFocus && phaseDone === 0 && !!nextPhase && phase.id > nextPhase.id;
+      const phaseQuestionIds = new Set();
+      phase.conceptIds.forEach(cid => (questionIdsByConceptId[cid] || []).forEach(qid => phaseQuestionIds.add(qid)));
+
+      const phaseEl = document.createElement('div');
+      phaseEl.className = 'roadmap-phase' + (isCurrentFocus ? ' is-current-focus' : '') + (isUpcoming ? ' is-upcoming' : '');
+
+      const head = document.createElement('div');
+      head.className = 'roadmap-phase-head';
+      head.innerHTML = `
+        <span class="roadmap-phase-num">${phase.id}</span>
+        <h3>${isKo ? phase.title_ko : phase.title_en}</h3>
+        <span class="roadmap-phase-count">${phaseDone} / ${phase.conceptIds.length}</span>
+      `;
+      phaseEl.appendChild(head);
+
+      if (phase.intro_ko || phase.intro_en) {
+        const intro = document.createElement('p');
+        intro.className = 'roadmap-phase-intro';
+        intro.textContent = isKo ? phase.intro_ko : phase.intro_en;
+        phaseEl.appendChild(intro);
+      }
+
+      const meta = document.createElement('div');
+      meta.className = 'roadmap-phase-meta';
+      meta.textContent = isKo
+        ? `개념 ${phase.conceptIds.length}개 · 문제 ${phaseQuestionIds.size}개`
+        : `${phase.conceptIds.length} concepts · ${phaseQuestionIds.size} questions`;
+      phaseEl.appendChild(meta);
+
+      const rows = document.createElement('div');
+      rows.className = 'roadmap-concept-rows';
+      phase.conceptIds.forEach(conceptId => {
+        const conceptMeta = mm.concepts[conceptId];
+        if (!conceptMeta) return;
+        const isDone = state.roadmapProgress.has(conceptId);
+        const qCount = (questionIdsByConceptId[conceptId] || []).length;
+
+        const row = document.createElement('div');
+        row.className = 'roadmap-concept-row' + (isDone ? ' is-done' : '');
+        row.style.setProperty('--tone', mmCatMeta(conceptMeta.cat).color);
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'roadmap-concept-check';
+        checkbox.checked = isDone;
+        checkbox.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (checkbox.checked) state.roadmapProgress.add(conceptId);
+          else state.roadmapProgress.delete(conceptId);
+          saveRoadmapProgress();
+          renderRoadmap();
+        });
+
+        const label = document.createElement('span');
+        label.className = 'roadmap-concept-label';
+        label.textContent = isKo ? conceptMeta.label_ko : conceptMeta.label;
+
+        const count = document.createElement('span');
+        count.className = 'roadmap-concept-qcount';
+        count.textContent = isKo ? `문제 ${qCount}개` : `${qCount} Q`;
+
+        row.appendChild(checkbox);
+        row.appendChild(label);
+        row.appendChild(count);
+        row.addEventListener('click', () => openConceptModalById(conceptId, true));
+        rows.appendChild(row);
+      });
+      phaseEl.appendChild(rows);
+      el.roadmapPhaseList.appendChild(phaseEl);
+    });
+  }
+
+  // ==========================================================================
   // Concept Question Modal -- one unified entry point for "practice this
   // concept", whether or not the concept also happens to match a curated
   // AWS_DOMAINS service. Exam tips are shown as a bonus when a service match
   // exists; the question list and quiz actions work for every concept.
   // ==========================================================================
-  function openConceptQuestionModal(meta, curated, questions) {
+  function openConceptQuestionModal(meta, curated, questions, viaRoadmap) {
     state.selectedConceptMeta = meta;
     state.selectedCuratedService = curated;
     state.selectedConceptQuestions = questions;
+    state.selectedLocalDumpQuestions = (typeof LOCAL_DUMP_BANK !== 'undefined')
+      ? LOCAL_DUMP_BANK.filter(q => (q.conceptIds || []).includes(meta.id))
+      : [];
+    state.cqViaRoadmap = !!viaRoadmap;
     // Default straight to Practice when this concept has no curated tips --
     // the Tips tab would otherwise open on an empty state every time.
     const isKo = state.currentLang === 'ko';
     const tips = getConceptTips(meta.id, curated, isKo);
     state.cqTab = (tips && tips.length > 0) ? 'tips' : 'practice';
     state.cqPractice = { index: 0, userAnswers: {}, revealed: {} };
+    state.cqLocalDumpPractice = { index: 0, userAnswers: {}, revealed: {} };
     renderConceptQuestionModalContent();
     el.modalConceptQuestions.classList.add('active');
   }
@@ -1331,9 +1526,12 @@ document.addEventListener('DOMContentLoaded', () => {
     state.cqTab = tab;
     el.btnCqTabTips.classList.toggle('active', tab === 'tips');
     el.btnCqTabPractice.classList.toggle('active', tab === 'practice');
+    el.btnCqTabLocalDump.classList.toggle('active', tab === 'localdump');
     el.cqTipsPanel.style.display = tab === 'tips' ? '' : 'none';
     el.cqPracticePanel.style.display = tab === 'practice' ? '' : 'none';
+    el.cqLocalDumpPanel.style.display = tab === 'localdump' ? '' : 'none';
     if (tab === 'practice') renderCqPracticePanel();
+    if (tab === 'localdump') renderCqLocalDumpPracticePanel();
   }
 
   function renderConceptQuestionModalContent() {
@@ -1361,6 +1559,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // this concept; Tips stays reachable either way.
     el.btnCqTabPractice.disabled = questions.length === 0;
 
+    // Local Exam Dump tab only exists at all when dump-answered.js is present
+    // (local dev), and only makes sense once this concept has a match in it.
+    const localDumpQuestions = state.selectedLocalDumpQuestions || [];
+    const hasLocalDumpBank = typeof LOCAL_DUMP_BANK !== 'undefined';
+    el.btnCqTabLocalDump.style.display = hasLocalDumpBank ? '' : 'none';
+    el.btnCqTabLocalDump.disabled = localDumpQuestions.length === 0;
+
+    // "다음 개념" only makes sense when the learner arrived from the Study
+    // Roadmap tab -- elsewhere (mindmap browsing) there's no defined "next".
+    el.btnCqNextConcept.style.display = state.cqViaRoadmap ? '' : 'none';
+
     if (tips) {
       tips.forEach(tip => {
         const li = document.createElement('li');
@@ -1374,20 +1583,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // In-modal practice: solve every question tagged to this concept, with
   // number/prev/next navigation, right inside the mindmap tab's modal.
-  function renderCqPracticePanel() {
-    const questions = state.selectedConceptQuestions || [];
-    const practice = state.cqPractice;
+  // Shared by the "Practice" tab (public QUESTION_BANK) and the local-only
+  // "Local Exam Dump" tab (LOCAL_DUMP_BANK) -- same UI, different data source
+  // and DOM refs, kept as separate practice/reveal state per tab.
+  function renderQuestionPracticePanel(questions, practice, refs, emptyMessage, rerender) {
     if (!practice) return;
     const isKo = state.currentLang === 'ko';
 
     if (questions.length === 0) {
-      el.cqNumStrip.innerHTML = '';
-      el.cqLblQuestionNumber.textContent = '';
-      el.cqLblQuestionScenario.textContent = isKo ? '이 개념에 연결된 문제가 아직 없습니다.' : 'No questions linked to this concept yet.';
-      el.cqOptionsContainer.innerHTML = '';
-      el.cqExplanationBox.style.display = 'none';
-      el.btnCqPrevQuestion.disabled = true;
-      el.btnCqNextQuestion.disabled = true;
+      refs.numStrip.innerHTML = '';
+      refs.lblNumber.textContent = '';
+      refs.lblScenario.textContent = emptyMessage;
+      refs.optionsContainer.innerHTML = '';
+      refs.explanationBox.style.display = 'none';
+      refs.prevBtn.disabled = true;
+      refs.nextBtn.disabled = true;
       return;
     }
 
@@ -1395,10 +1605,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const idx = practice.index;
     const q = questions[idx];
 
-    el.cqLblQuestionNumber.textContent = isKo ? `문제 ${idx + 1} / ${questions.length}` : `Q. ${idx + 1} / ${questions.length}`;
-    el.cqLblQuestionScenario.textContent = isKo ? q.question_ko : q.question_en;
+    refs.lblNumber.textContent = isKo ? `문제 ${idx + 1} / ${questions.length}` : `Q. ${idx + 1} / ${questions.length}`;
+    refs.lblScenario.textContent = isKo ? q.question_ko : q.question_en;
 
-    el.cqNumStrip.innerHTML = '';
+    refs.numStrip.innerHTML = '';
     questions.forEach((_, i) => {
       const node = document.createElement('div');
       node.className = 'omr-node';
@@ -1407,12 +1617,12 @@ document.addEventListener('DOMContentLoaded', () => {
       if (practice.userAnswers[i] !== undefined) node.classList.add('answered');
       node.addEventListener('click', () => {
         practice.index = i;
-        renderCqPracticePanel();
+        rerender();
       });
-      el.cqNumStrip.appendChild(node);
+      refs.numStrip.appendChild(node);
     });
 
-    el.cqOptionsContainer.innerHTML = '';
+    refs.optionsContainer.innerHTML = '';
     const options = isKo ? q.options_ko : q.options_en;
     const selected = practice.userAnswers[idx];
     const isRevealed = practice.revealed[idx];
@@ -1425,7 +1635,7 @@ document.addEventListener('DOMContentLoaded', () => {
       hint.textContent = isKo
         ? `정답 ${q.answer.length}개를 선택하세요 (${selectedList.length}/${q.answer.length})`
         : `Select ${q.answer.length} correct answers (${selectedList.length}/${q.answer.length})`;
-      el.cqOptionsContainer.prepend(hint);
+      refs.optionsContainer.prepend(hint);
     }
 
     options.forEach((optText, optIdx) => {
@@ -1466,20 +1676,46 @@ document.addEventListener('DOMContentLoaded', () => {
           practice.userAnswers[idx] = optIdx;
         }
         practice.revealed[idx] = true;
-        renderCqPracticePanel();
+        rerender();
       });
-      el.cqOptionsContainer.appendChild(optItem);
+      refs.optionsContainer.appendChild(optItem);
     });
 
     if (isRevealed) {
-      el.cqExplanationBox.style.display = 'block';
-      el.cqLblExplanationText.innerHTML = renderExplanationMarkdown(isKo ? q.explanation_ko : q.explanation_en);
+      refs.explanationBox.style.display = 'block';
+      refs.lblExplanationText.innerHTML = renderExplanationMarkdown(isKo ? q.explanation_ko : q.explanation_en);
     } else {
-      el.cqExplanationBox.style.display = 'none';
+      refs.explanationBox.style.display = 'none';
     }
 
-    el.btnCqPrevQuestion.disabled = idx === 0;
-    el.btnCqNextQuestion.disabled = idx === questions.length - 1;
+    refs.prevBtn.disabled = idx === 0;
+    refs.nextBtn.disabled = idx === questions.length - 1;
+  }
+
+  function renderCqPracticePanel() {
+    renderQuestionPracticePanel(
+      state.selectedConceptQuestions || [], state.cqPractice,
+      {
+        numStrip: el.cqNumStrip, lblNumber: el.cqLblQuestionNumber, lblScenario: el.cqLblQuestionScenario,
+        optionsContainer: el.cqOptionsContainer, explanationBox: el.cqExplanationBox,
+        lblExplanationText: el.cqLblExplanationText, prevBtn: el.btnCqPrevQuestion, nextBtn: el.btnCqNextQuestion
+      },
+      state.currentLang === 'ko' ? '이 개념에 연결된 문제가 아직 없습니다.' : 'No questions linked to this concept yet.',
+      renderCqPracticePanel
+    );
+  }
+
+  function renderCqLocalDumpPracticePanel() {
+    renderQuestionPracticePanel(
+      state.selectedLocalDumpQuestions || [], state.cqLocalDumpPractice,
+      {
+        numStrip: el.cqLocalDumpNumStrip, lblNumber: el.cqLblLocalDumpQuestionNumber, lblScenario: el.cqLblLocalDumpQuestionScenario,
+        optionsContainer: el.cqLocalDumpOptionsContainer, explanationBox: el.cqLocalDumpExplanationBox,
+        lblExplanationText: el.cqLblLocalDumpExplanationText, prevBtn: el.btnCqPrevLocalDumpQuestion, nextBtn: el.btnCqNextLocalDumpQuestion
+      },
+      state.currentLang === 'ko' ? '이 개념에 연결된 로컬 기출문제가 없습니다.' : 'No local exam-dump questions linked to this concept.',
+      renderCqLocalDumpPracticePanel
+    );
   }
 
   // ==========================================================================
@@ -2002,6 +2238,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.selectedConceptMeta) renderConceptQuestionModalContent();
     if (state.examSession.active && !state.examSession.isSubmitted) renderCurrentQuestion();
     if (state.currentTab === 'incorrect') renderIncorrectNotes();
+    if (state.currentTab === 'roadmap') renderRoadmap();
   }
 
   function updateLanguageUI() {
@@ -2064,13 +2301,28 @@ document.addEventListener('DOMContentLoaded', () => {
     // Concept Question Modal Controls
     el.btnCloseConceptQuestions.addEventListener('click', closeConceptQuestionModal);
     el.btnCloseConceptQuestionsFooter.addEventListener('click', closeConceptQuestionModal);
+    el.btnCqNextConcept.addEventListener('click', () => {
+      const currentId = state.selectedConceptMeta && state.selectedConceptMeta.id;
+      if (currentId) {
+        state.roadmapProgress.add(currentId);
+        saveRoadmapProgress();
+      }
+      if (state.currentTab === 'roadmap') renderRoadmap();
+      const nextId = getNextIncompleteConceptId(currentId);
+      if (nextId) {
+        openConceptModalById(nextId, true);
+      } else {
+        closeConceptQuestionModal();
+      }
+    });
     el.modalConceptQuestions.addEventListener('click', (e) => {
       if (e.target === el.modalConceptQuestions) closeConceptQuestionModal();
     });
 
-    // Tips <-> Practice tab switch, in-modal question navigation
+    // Tips <-> Practice <-> Local Exam Dump tab switch, in-modal question navigation
     el.btnCqTabTips.addEventListener('click', () => setCqTab('tips'));
     el.btnCqTabPractice.addEventListener('click', () => setCqTab('practice'));
+    el.btnCqTabLocalDump.addEventListener('click', () => setCqTab('localdump'));
 
     el.btnCqPrevQuestion.addEventListener('click', () => {
       if (state.cqPractice.index > 0) {
@@ -2083,6 +2335,20 @@ document.addEventListener('DOMContentLoaded', () => {
       if (state.cqPractice.index < total - 1) {
         state.cqPractice.index++;
         renderCqPracticePanel();
+      }
+    });
+
+    el.btnCqPrevLocalDumpQuestion.addEventListener('click', () => {
+      if (state.cqLocalDumpPractice.index > 0) {
+        state.cqLocalDumpPractice.index--;
+        renderCqLocalDumpPracticePanel();
+      }
+    });
+    el.btnCqNextLocalDumpQuestion.addEventListener('click', () => {
+      const total = (state.selectedLocalDumpQuestions || []).length;
+      if (state.cqLocalDumpPractice.index < total - 1) {
+        state.cqLocalDumpPractice.index++;
+        renderCqLocalDumpPracticePanel();
       }
     });
 
@@ -2239,6 +2505,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (tabId === 'mindmap') {
       document.getElementById('viewMindmap').classList.add('active');
       renderKnowledgeGraph();
+    } else if (tabId === 'roadmap') {
+      document.getElementById('viewRoadmap').classList.add('active');
+      renderRoadmap();
     } else if (tabId === 'exam') {
       document.getElementById('viewExam').classList.add('active');
       if (!keepExamOverlay) el.examSetupScreen.style.display = 'block';

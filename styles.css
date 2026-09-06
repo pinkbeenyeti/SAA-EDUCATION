@@ -1618,6 +1618,153 @@ summary:focus-visible, a:focus-visible, .mm-node:focus-visible {
 .legal-page .legal-back { display: inline-block; margin-bottom: 2rem; font-size: 0.9rem; color: var(--accent); text-decoration: none; }
 .legal-page .legal-back:hover { text-decoration: underline; }
 
+/* ==========================================================================
+   Study Roadmap
+   ========================================================================== */
+.roadmap-header {
+  max-width: 720px;
+  margin: 0 auto 2rem;
+  text-align: center;
+}
+.roadmap-header h2 { font-size: 1.9rem; color: var(--ink); margin-bottom: 0.6rem; }
+.roadmap-header p { color: var(--ink-2); font-size: 0.95rem; line-height: 1.6; }
+.roadmap-progress-bar {
+  margin-top: 1.4rem;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.roadmap-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--r-pill);
+  transition: width var(--t-mid);
+}
+.roadmap-progress-label {
+  display: inline-block;
+  margin-top: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--ink-3);
+}
+
+.roadmap-next-banner {
+  max-width: 720px;
+  margin: 0 auto 1.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.4rem;
+  border-radius: var(--r-lg);
+  background: var(--accent-tint);
+  border: 1px solid var(--accent);
+  cursor: pointer;
+  transition: transform var(--t-fast);
+}
+.roadmap-next-banner:hover { transform: translateY(-1px); }
+.roadmap-next-info { display: flex; flex-direction: column; gap: 0.2rem; }
+.roadmap-next-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+.roadmap-next-concept { font-size: 1.05rem; color: var(--ink); }
+.roadmap-next-phase { font-size: 0.8rem; color: var(--ink-3); }
+.roadmap-next-arrow { font-size: 1.3rem; color: var(--accent); flex-shrink: 0; }
+
+.roadmap-phase-list {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+.roadmap-phase {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--lift-1);
+  padding: 1.3rem 1.5rem;
+  transition: opacity var(--t-mid), box-shadow var(--t-mid);
+}
+.roadmap-phase.is-current-focus {
+  box-shadow: var(--lift-1), 0 0 0 2px var(--accent);
+}
+.roadmap-phase.is-upcoming { opacity: 0.6; }
+.roadmap-phase-intro {
+  margin-top: 0.8rem;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.roadmap-phase-meta {
+  margin-top: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--ink-3);
+}
+.roadmap-phase-head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--hair);
+}
+.roadmap-phase-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.roadmap-phase-head h3 {
+  flex: 1;
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+.roadmap-phase-count {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--ink-3);
+}
+
+.roadmap-concept-rows { margin-top: 0.6rem; }
+.roadmap-concept-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 0.4rem;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background var(--t-fast);
+}
+.roadmap-concept-row::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tone, var(--ink-3));
+  flex-shrink: 0;
+}
+.roadmap-concept-row:hover { background: var(--surface-3); }
+.roadmap-concept-check { flex-shrink: 0; width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.roadmap-concept-label { flex: 1; font-size: 0.92rem; color: var(--ink); }
+.roadmap-concept-row.is-done .roadmap-concept-label { color: var(--ink-3); text-decoration: line-through; }
+.roadmap-concept-qcount {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--ink-3);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
