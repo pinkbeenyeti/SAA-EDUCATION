@@ -1381,6 +1381,30 @@ summary:focus-visible, a:focus-visible, .mm-node:focus-visible {
   border-radius: 4px;
 }
 
+/* Structured per-option explanation: each option gets its own reasoning
+   row, correctness derived from the answer field and letters assigned at
+   render time from the option's current array position -- see
+   renderExplanationStructured() in app.js. This can never cite a stale
+   letter the way freeform prose could after options got reshuffled. */
+.exp-summary { margin-bottom: 0.75rem; }
+.exp-options-list { display: flex; flex-direction: column; gap: 0.55rem; }
+.exp-option-row {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--r-md);
+  border: 1px solid var(--hair);
+  background: var(--surface-2);
+}
+.exp-option-row.exp-opt-correct { background: var(--green-tint); border-color: var(--green); }
+.exp-option-row.exp-opt-wrong { background: var(--red-tint); border-color: var(--red); }
+.exp-option-marker { flex: 0 0 auto; font-weight: 700; font-size: 0.8rem; white-space: nowrap; }
+.exp-option-row.exp-opt-correct .exp-option-marker { color: var(--green); }
+.exp-option-row.exp-opt-wrong .exp-option-marker { color: var(--red); }
+.exp-option-reason { font-size: 0.885rem; line-height: 1.55; color: var(--ink); overflow-wrap: break-word; }
+.exp-option-reason p { margin: 0 0 0.6em; }
+.exp-option-reason p:last-child { margin-bottom: 0; }
+
 .exam-nav-bar { display: flex; justify-content: space-between; gap: 0.6rem; margin-top: 1rem; flex-wrap: wrap; }
 
 .exam-sidebar-panel {
