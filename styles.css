@@ -1562,6 +1562,32 @@ summary:focus-visible, a:focus-visible, .mm-node:focus-visible {
 }
 .btn-remove-note:hover { color: #fff; background: var(--red); }
 
+.browse-count { color: var(--ink-3); font-size: 0.82rem; white-space: nowrap; }
+
+.browse-list { display: flex; flex-direction: column; gap: 0.9rem; }
+
+.btn-browse-load-more { align-self: center; margin-top: 0.4rem; }
+
+.browse-concept-chip {
+  font-family: inherit;
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--ink-2);
+  background: var(--surface-3);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-pill);
+  padding: 0.2rem 0.65rem;
+  cursor: pointer;
+  transition: var(--t-fast);
+}
+.browse-concept-chip:hover { color: #fff; background: var(--accent); border-color: transparent; }
+
+/* Browse cards show every option pre-graded -- not an interactive quiz, so
+   the hover affordance that implies "clickable" is switched off here. */
+.option-item.browse-option { cursor: default; }
+.option-item.browse-option:hover { background: var(--surface-2); border-color: var(--hair); }
+.option-item.browse-option.correct:hover { background: var(--green-tint); border-color: var(--green); }
+
 /* ==========================================================================
    Responsive
    ========================================================================== */

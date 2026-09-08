@@ -35,7 +35,10 @@ document.addEventListener('DOMContentLoaded', () => {
       isSubmitted: false
     },
     incorrectNotes: [],
-    roadmapProgress: new Set(JSON.parse(localStorage.getItem('aws_saa_roadmap_progress') || '[]'))
+    roadmapProgress: new Set(JSON.parse(localStorage.getItem('aws_saa_roadmap_progress') || '[]')),
+    // source: 'main' | 'localdump'; renderedCount grows by pageSize as the
+    // user clicks "load more" and resets to pageSize whenever a filter changes.
+    browse: { conceptId: '', query: '', source: 'main', pageSize: 24, renderedCount: 24 }
   };
 
   // ==========================================================================
@@ -55,6 +58,16 @@ document.addEventListener('DOMContentLoaded', () => {
     selectLocalDumpCount: document.getElementById('selectLocalDumpCount'),
     btnStartLocalDumpExam: document.getElementById('btnStartLocalDumpExam'),
     txtLocalDumpCount: document.getElementById('txtLocalDumpCount'),
+
+    // Browse All Questions (answer key view -- local-only, see navTabLocalDump)
+    navTabBrowse: document.getElementById('navTabBrowse'),
+    selectBrowseConcept: document.getElementById('selectBrowseConcept'),
+    inputBrowseSearch: document.getElementById('inputBrowseSearch'),
+    browseSourceToggle: document.getElementById('browseSourceToggle'),
+    btnBrowseSourceMain: document.getElementById('btnBrowseSourceMain'),
+    btnBrowseSourceLocalDump: document.getElementById('btnBrowseSourceLocalDump'),
+    txtBrowseCount: document.getElementById('txtBrowseCount'),
+    browseListContainer: document.getElementById('browseListContainer'),
 
     // Study Roadmap View
     roadmapPhaseList: document.getElementById('roadmapPhaseList'),
@@ -174,6 +187,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof LOCAL_DUMP_BANK !== 'undefined' && LOCAL_DUMP_BANK.length > 0) {
       el.navTabLocalDump.style.display = '';
       el.txtLocalDumpCount.textContent = `로컬에 ${LOCAL_DUMP_BANK.length}문제 있음 (단일 정답 문제만, AI 검증 tier A/B)`;
+      // "Browse All" is a QA/review tool for this project's own content, not a
+      // learner-facing feature -- gate the whole tab (not just the source
+      // toggle) behind the same local-only artifact so it never appears on
+      // the public deployment even if this code ships.
+      el.navTabBrowse.style.display = '';
+      el.browseSourceToggle.style.display = '';
+      populateBrowseConceptOptions();
     }
 
     window.addEventListener('resize', debounce(() => {
@@ -2278,6 +2298,177 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================================================
+  // Browse All Questions -- an answer-key view over the whole bank: every
+  // question at once, filterable by concept or by number/keyword, with the
+  // correct option(s) and explanation already shown. Nothing to click to
+  // reveal; this is a read-only reference view, not a practice mode.
+  // ==========================================================================
+  function populateBrowseConceptOptions() {
+    if (!el.selectBrowseConcept) return;
+    const isKo = state.currentLang === 'ko';
+    const prevValue = state.browse.conceptId;
+
+    const byCat = Object.create(null);
+    KNOWLEDGE_GRAPH.nodes.forEach(n => (byCat[n.cat] = byCat[n.cat] || []).push(n));
+
+    el.selectBrowseConcept.innerHTML = `<option value="">${isKo ? '전체 개념' : 'All Concepts'}</option>`;
+    Object.keys(KG_CATEGORIES).forEach(cat => {
+      const list = (byCat[cat] || []).slice().sort((a, b) => b.w - a.w);
+      if (!list.length) return;
+      const group = document.createElement('optgroup');
+      group.label = isKo ? KG_CATEGORIES[cat].ko : KG_CATEGORIES[cat].en;
+      list.forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = n.id;
+        opt.textContent = isKo ? n.label_ko : n.label;
+        group.appendChild(opt);
+      });
+      el.selectBrowseConcept.appendChild(group);
+    });
+
+    // KNOWLEDGE_GRAPH concept ids are a superset of every conceptIds tag used
+    // across QUESTION_BANK/LOCAL_DUMP_BANK, so the previous selection always
+    // still exists in the rebuilt list -- restore it after a language switch.
+    el.selectBrowseConcept.value = prevValue;
+  }
+
+  function setBrowseSource(source) {
+    state.browse.source = source;
+    state.browse.renderedCount = state.browse.pageSize;
+    el.btnBrowseSourceMain.classList.toggle('is-active', source === 'main');
+    el.btnBrowseSourceLocalDump.classList.toggle('is-active', source === 'localdump');
+    renderBrowseList();
+  }
+
+  function renderBrowseList() {
+    if (!el.browseListContainer) return;
+    const isKo = state.currentLang === 'ko';
+    const hasLocalDump = typeof LOCAL_DUMP_BANK !== 'undefined' && LOCAL_DUMP_BANK.length > 0;
+    const source = (state.browse.source === 'localdump' && hasLocalDump) ? LOCAL_DUMP_BANK : QUESTION_BANK;
+
+    const conceptId = state.browse.conceptId;
+    const query = state.browse.query;
+    const filtered = source.filter(q => {
+      if (conceptId && !(q.conceptIds || []).includes(conceptId)) return false;
+      if (query) {
+        const haystack = `${q.id} ${q.question_ko || ''} ${q.question_en || ''}`.toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      el.txtBrowseCount.textContent = isKo
+        ? `0개 표시 중 (전체 ${source.length}개)`
+        : `Showing 0 of ${source.length}`;
+      el.browseListContainer.innerHTML = `
+        <div style="text-align: center; padding: 4rem 1rem; color: var(--text-muted);">
+          <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
+          <h3>${isKo ? '조건에 맞는 문제가 없습니다.' : 'No questions match this filter.'}</h3>
+        </div>
+      `;
+      return;
+    }
+
+    // Rendering every match at once (each card parses markdown and lays out
+    // 4 options + an explanation box) gets visibly slow once the filtered
+    // set runs into the hundreds -- render only a page's worth, plus a
+    // "load more" button that appends the next page in place.
+    const visibleCount = Math.min(state.browse.renderedCount, filtered.length);
+    const visible = filtered.slice(0, visibleCount);
+
+    el.txtBrowseCount.textContent = isKo
+      ? `${visibleCount}개 표시 중 (조건 일치 ${filtered.length}개 / 전체 ${source.length}개)`
+      : `Showing ${visibleCount} of ${filtered.length} matches (bank: ${source.length})`;
+
+    el.browseListContainer.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    visible.forEach((q, idx) => frag.appendChild(renderBrowseCard(q, idx, isKo)));
+    el.browseListContainer.appendChild(frag);
+
+    if (filtered.length > visible.length) {
+      const remaining = filtered.length - visible.length;
+      const loadMoreBtn = document.createElement('button');
+      loadMoreBtn.type = 'button';
+      loadMoreBtn.className = 'btn-secondary btn-browse-load-more';
+      loadMoreBtn.textContent = isKo
+        ? `${Math.min(state.browse.pageSize, remaining)}개 더 보기 (남음 ${remaining}개)`
+        : `Load ${Math.min(state.browse.pageSize, remaining)} more (${remaining} left)`;
+      loadMoreBtn.addEventListener('click', () => {
+        state.browse.renderedCount += state.browse.pageSize;
+        renderBrowseList();
+      });
+      el.browseListContainer.appendChild(loadMoreBtn);
+    }
+  }
+
+  function renderBrowseCard(q, idx, isKo) {
+    const options = isKo ? q.options_ko : q.options_en;
+    const multi = isMultiAnswer(q);
+    const correctSet = multi ? new Set(q.answer) : new Set([q.answer]);
+
+    const card = document.createElement('div');
+    card.className = 'incorrect-card browse-card';
+
+    const chipsHtml = (q.conceptIds || []).map(cid => {
+      const meta = mm.concepts[cid];
+      const label = meta ? (isKo ? meta.label_ko : meta.label) : cid;
+      return `<button type="button" class="browse-concept-chip" data-concept-id="${cid}">${label}</button>`;
+    }).join('');
+
+    const top = document.createElement('div');
+    top.className = 'incorrect-card-top';
+    top.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+        <span style="font-weight: 800; color: var(--color-security);">#${idx + 1}</span>
+        <span class="service-badge">${String(q.id).toUpperCase()}</span>
+        ${chipsHtml}
+      </div>
+    `;
+    card.appendChild(top);
+
+    const questionEl = document.createElement('div');
+    questionEl.style.cssText = 'font-size: 1rem; font-weight: 600; color: var(--text-highlight); margin-bottom: 1rem; line-height: 1.5;';
+    questionEl.textContent = isKo ? q.question_ko : q.question_en;
+    card.appendChild(questionEl);
+
+    const optionsList = document.createElement('div');
+    optionsList.className = 'options-list';
+    options.forEach((optText, optIdx) => {
+      const optItem = document.createElement('div');
+      optItem.className = 'option-item browse-option' + (correctSet.has(optIdx) ? ' correct' : '');
+      const markerLetter = String.fromCharCode(65 + optIdx);
+      optItem.innerHTML = `
+        <div class="option-marker">${markerLetter}</div>
+        <div class="option-text">${optText}</div>
+      `;
+      optionsList.appendChild(optItem);
+    });
+    card.appendChild(optionsList);
+
+    const explBox = document.createElement('div');
+    explBox.className = 'explanation-box';
+    explBox.style.marginTop = '1rem';
+    explBox.innerHTML = `
+      <div class="explanation-title">💡 ${isKo ? '해설' : 'Explanation'}</div>
+      <div class="explanation-content">${renderExplanationMarkdown(isKo ? q.explanation_ko : q.explanation_en)}</div>
+    `;
+    card.appendChild(explBox);
+
+    card.querySelectorAll('.browse-concept-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const cid = chip.getAttribute('data-concept-id');
+        state.browse.conceptId = cid;
+        state.browse.renderedCount = state.browse.pageSize;
+        el.selectBrowseConcept.value = cid;
+        renderBrowseList();
+      });
+    });
+
+    return card;
+  }
+
+  // ==========================================================================
   // Language & Global UI Translation
   // ==========================================================================
   function toggleLanguage() {
@@ -2290,6 +2481,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (state.examSession.active && !state.examSession.isSubmitted) renderCurrentQuestion();
     if (state.currentTab === 'incorrect') renderIncorrectNotes();
     if (state.currentTab === 'roadmap') renderRoadmap();
+    if (typeof LOCAL_DUMP_BANK !== 'undefined' && LOCAL_DUMP_BANK.length > 0) {
+      populateBrowseConceptOptions();
+      if (state.currentTab === 'browse') renderBrowseList();
+    }
   }
 
   function updateLanguageUI() {
@@ -2370,6 +2565,20 @@ document.addEventListener('DOMContentLoaded', () => {
     el.modalConceptQuestions.addEventListener('click', (e) => {
       if (e.target === el.modalConceptQuestions) closeConceptQuestionModal();
     });
+
+    // Browse All Questions (answer key view)
+    el.selectBrowseConcept.addEventListener('change', (e) => {
+      state.browse.conceptId = e.target.value;
+      state.browse.renderedCount = state.browse.pageSize;
+      renderBrowseList();
+    });
+    el.inputBrowseSearch.addEventListener('input', debounce((e) => {
+      state.browse.query = e.target.value.trim().toLowerCase();
+      state.browse.renderedCount = state.browse.pageSize;
+      renderBrowseList();
+    }, 220));
+    el.btnBrowseSourceMain.addEventListener('click', () => setBrowseSource('main'));
+    el.btnBrowseSourceLocalDump.addEventListener('click', () => setBrowseSource('localdump'));
 
     // Tips <-> Practice <-> Local Exam Dump tab switch, in-modal question navigation
     el.btnCqTabTips.addEventListener('click', () => setCqTab('tips'));
@@ -2566,6 +2775,9 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (tabId === 'incorrect') {
       document.getElementById('viewIncorrect').classList.add('active');
       renderIncorrectNotes();
+    } else if (tabId === 'browse') {
+      document.getElementById('viewBrowse').classList.add('active');
+      renderBrowseList();
     } else if (tabId === 'localdump') {
       document.getElementById('viewLocalDump').classList.add('active');
     }

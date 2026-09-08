@@ -59,6 +59,9 @@
         </button>
         <!-- Only shown when dump-answered.js is present -- a local-only build
              artifact, gitignored, never shipped on the public site. -->
+        <button class="nav-tab-btn" data-tab="browse" id="navTabBrowse" style="display: none;">
+          <span>📖</span> <span class="tab-label" data-ko="문제 전체보기" data-en="Browse All">문제 전체보기</span>
+        </button>
         <button class="nav-tab-btn" data-tab="localdump" id="navTabLocalDump" style="display: none;">
           <span>🗄️</span> <span class="tab-label" data-ko="기출 모의고사 (로컬)" data-en="Dump Practice (Local)">기출 모의고사 (로컬)</span>
         </button>
@@ -320,6 +323,35 @@
 
         <div class="incorrect-list" id="incorrectListContainer">
           <!-- Dynamic Incorrect Cards -->
+        </div>
+      </section>
+
+      <!-- ==========================================
+           TAB: Browse All Questions (answer key view) --
+           every question at once, filterable by concept/number, with the
+           correct option(s) and explanation already shown -- no clicking
+           required.
+           ========================================== -->
+      <section id="viewBrowse" class="tab-view">
+        <div class="kg-toolbar">
+          <div class="kg-controls">
+            <select id="selectBrowseConcept" class="config-selector">
+              <option value="" data-ko="전체 개념" data-en="All Concepts">전체 개념</option>
+            </select>
+            <div class="search-box">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="inputBrowseSearch" placeholder="번호, ID, 키워드로 검색..." autocomplete="off">
+            </div>
+            <div class="btn-group" id="browseSourceToggle" style="display: none;">
+              <button type="button" class="btn-quiet is-active" id="btnBrowseSourceMain" data-ko="문제은행" data-en="Question Bank">문제은행</button>
+              <button type="button" class="btn-quiet" id="btnBrowseSourceLocalDump" data-ko="로컬 기출" data-en="Local Dump">로컬 기출</button>
+            </div>
+          </div>
+          <span id="txtBrowseCount" class="browse-count"></span>
+        </div>
+
+        <div class="browse-list" id="browseListContainer">
+          <!-- Dynamic Browse Cards -->
         </div>
       </section>
 
